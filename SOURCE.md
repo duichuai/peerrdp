@@ -50,7 +50,31 @@ AAR 由上述源码构建，构建期共应用 9 处补丁，全部为构建配�
 | cJSON | 1.7.19 | https://github.com/DaveGamble/cJSON |
 | uriparser | 1.0.2 | https://github.com/uriparser/uriparser |
 | SQLCipher | 4.17.0 | https://github.com/sqlcipher/sqlcipher |
+| EasyTier | 2.6.4 | https://github.com/EasyTier/EasyTier |
 
 ## 5. 书面要约
 
 若无法通过上述途径获取对应源码，可通过本仓库的 Issue 联系维护者，我们将在合理时间内提供源码副本，收取的费用不超过源码分发成本。
+
+## 6. EasyTier（LGPL-3.0）
+
+`app/src/main/jniLibs/arm64-v8a/` 下的 `libeasytier_ffi.so`、`libeasytier_android_jni.so`
+由 EasyTier `v2.6.4`（tag 提交 `8428a89d2dabc94c97d370ec607c6ca142473626`）源码构建，**未修改上游源码**。
+
+- 源码：<https://github.com/EasyTier/EasyTier/tree/v2.6.4>
+- 构建脚本：[`scripts/build-easytier-so.sh`](scripts/build-easytier-so.sh)
+- 构建命令（脚本等价内容）：
+
+  ```bash
+  export RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=16384"
+  cargo ndk -t arm64-v8a --platform 29 build --release   # easytier-contrib/easytier-ffi
+  cargo ndk -t arm64-v8a --platform 29 build --release   # easytier-contrib/easytier-android-jni
+  ```
+
+- 工具链：Rust stable（`aarch64-linux-android` target）、cargo-ndk 4.1.2、Android NDK r29
+- 关键链接参数：`-Wl,-z,max-page-size=16384`（16KB 页对齐），JNI 库额外链接 `-leasytier_ffi`
+- 上游使用默认特性（包含 `socks5`）；本项目未裁剪或修改特性集合
+
+**重建与替换**：执行上述脚本会把两个 `.so` 回填到 `app/src/main/jniLibs/arm64-v8a/`，
+再运行 `scripts/build-app.sh release` 重新打包 APK 即可。`.so` 为独立动态库，可在不修改应用代码的前提下替换。
+

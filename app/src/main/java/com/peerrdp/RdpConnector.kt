@@ -9,6 +9,7 @@ import android.view.WindowInsets
 import android.view.WindowManager
 import com.peerrdp.data.AppDatabase
 import com.peerrdp.data.ConnectionEntity
+import com.peerrdp.easytier.EasyTierManager
 import com.peerrdp.tailscale.TailscaleManager
 import com.freerdp.freerdpcore.presentation.SessionActivity
 import kotlinx.coroutines.delay
@@ -45,6 +46,11 @@ object RdpConnector {
             // FreeRDP 支持 /proxy:socks5://host:port
             builder.appendQueryParameter("proxy", "socks5://$socksAddr")
             Log.i(TAG, "RDP via Tailscale SOCKS5: $socksAddr")
+        } else if (conn.easytierConfigId > 0) {
+            // EasyTier 联动：no_tun 实例启动后自带本地 SOCKS5
+            val port = EasyTierManager.ensureReady(context, conn.easytierConfigId)
+            builder.appendQueryParameter("proxy", "socks5://127.0.0.1:$port")
+            Log.i(TAG, "RDP via EasyTier SOCKS5: 127.0.0.1:$port")
         }
 
         val intent = Intent(context, SessionActivity::class.java).setData(builder.build())

@@ -112,6 +112,11 @@ has 'lib/arm64-v8a/libfreerdp-android\.so'      || die "APK 缺少 libfreerdp-an
 for so in libfreerdp3 libfreerdp-client3 libwinpr3 libssl libcrypto libsqlcipher; do
   has "lib/arm64-v8a/$so\.so" || die "APK 缺少 lib/arm64-v8a/$so.so"
 done
+for so in libeasytier_android_jni libeasytier_ffi; do
+  has "lib/arm64-v8a/$so\.so" \
+    || die "APK 缺少 lib/arm64-v8a/$so.so（先跑 scripts/build-easytier-so.sh）"
+done
+has 'lib/arm64-v8a/libgojni\.so' || die "APK 缺少 libgojni.so（tsnet 未打包）"
 grep -E 'classes[0-9]*\.dex|lib/arm64-v8a/' <<<"$LISTING"
 
 log "校验权限（引擎 AAR 合并进来的未使用权限应已被 manifest 移除）"
@@ -132,6 +137,44 @@ for p in INTERNET ACCESS_NETWORK_STATE; do
   grep -q "android.permission.$p'" <<<"$PERMS" || die "APK 缺少必需权限：$p"
 done
 grep -oE "android.permission.[A-Z_]+" <<<"$PERMS" | sort -u
+
+log "校验 EasyTier 原生库 16KB 页对齐"
+READELF=""
+# NDK 不一定装在应用构建用的 SDK 目录下（可能单独装在 /opt 或用户目录）
+for ndk in "${ANDROID_NDK_HOME:-}" \
+           $(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | sort -V -r) \
+           $(ls -d /opt/android-sdk/ndk/* 2>/dev/null | sort -V -r) \
+           $(ls -d "$HOME"/Android/Sdk/ndk/* 2>/dev/null | sort -V -r); do
+  if [[ -n "$ndk" && -x "$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" ]]; then
+    READELF="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+    break
+  fi
+done
+[[ -n "$READELF" ]] || die "找不到 llvm-readelf（需要 Android NDK r28+）"
+TMP_SO="$(mktemp -d)"
+unzip -q -o "$APK_OUT" 'lib/arm64-v8a/libeasytier_*.so' -d "$TMP_SO"
+for so in libeasytier_android_jni libeasytier_ffi; do
+  f="$TMP_SO/lib/arm64-v8a/$so.so"
+  [[ -f "$f" ]] || die "APK 内缺少 $so.so"
+  # mawk 不支持 strtonum，这里用可移植的十六进制转换
+  bad="$("$READELF" -lW "$f" | awk '
+    function hex2dec(h,   i, c, n) {
+      sub(/^0x/, "", h); n = 0
+      for (i = 1; i <= length(h); i++) {
+        c = index("0123456789abcdef", tolower(substr(h, i, 1))) - 1
+        n = n * 16 + c
+      }
+      return n
+    }
+    $1 == "LOAD" && hex2dec($NF) < 16384 { print }
+  ')"
+  [[ -z "$bad" ]] || die "$so.so 的 LOAD 段未按 16KB 对齐"
+done
+rm -rf "$TMP_SO"
+
+log "校验 zipalign（16KB 页）"
+"$ANDROID_HOME/build-tools/37.0.0/zipalign" -c -P 16 -v 4 "$APK_OUT" >/dev/null \
+  || die "APK 未通过 zipalign -c -P 16 校验"
 
 DEST="$REPO_ROOT/app-$VARIANT.apk"
 cp "$APK_OUT" "$DEST"

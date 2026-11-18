@@ -17,6 +17,8 @@ data class ConnectionEntity(
     val resolution: String = RESOLUTION_ADAPTIVE,
     /** 绑定的 Tailscale 配置 ID；0 表示不使用 Tailscale，直连 */
     val tailscaleConfigId: Long = 0,
+    /** 绑定的 EasyTier 配置 ID；0 表示不使用 EasyTier。与 tailscaleConfigId 互斥 */
+    val easytierConfigId: Long = 0,
     val createdAt: Long = System.currentTimeMillis(),
     val lastUsedAt: Long = 0
 ) {

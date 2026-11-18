@@ -5,6 +5,8 @@ import android.os.Bundle
 import android.text.InputType
 import android.util.Log
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
@@ -21,6 +23,7 @@ import com.peerrdp.data.ConnectionEntity
 import com.peerrdp.databinding.ActivityMainBinding
 import com.peerrdp.databinding.ItemConnectionBinding
 import com.peerrdp.edit.ConnectionEditActivity
+import com.peerrdp.easytier.EasyTierConfigEditActivity
 import com.peerrdp.tailscale.TailscaleConfigEditActivity
 import kotlinx.coroutines.launch
 
@@ -46,23 +49,54 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, ConnectionEditActivity::class.java))
         }
 
-        binding.fabTailscale.setOnClickListener {
-            // 已有配置则回填编辑，没有则新建
-            lifecycleScope.launch {
-                val existing = db.tailscaleConfigDao().getAll().firstOrNull()
-                val intent = Intent(this@MainActivity, TailscaleConfigEditActivity::class.java)
-                if (existing != null) {
-                    intent.putExtra(TailscaleConfigEditActivity.EXTRA_CONFIG_ID, existing.id)
-                }
-                startActivity(intent)
-            }
-        }
+        binding.fabTailscale.setOnClickListener { openTailscaleConfig() }
 
         lifecycleScope.launch {
             db.connectionDao().observeAll().collect { list ->
                 adapter.submitList(list)
                 binding.emptyView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
             }
+        }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
+        R.id.action_tailscale -> {
+            openTailscaleConfig()
+            true
+        }
+        R.id.action_easytier -> {
+            openEasyTierConfig()
+            true
+        }
+        else -> super.onOptionsItemSelected(item)
+    }
+
+    /** 已有 Tailscale 配置则回填编辑，没有则新建 */
+    private fun openTailscaleConfig() {
+        lifecycleScope.launch {
+            val existing = db.tailscaleConfigDao().getAll().firstOrNull()
+            val intent = Intent(this@MainActivity, TailscaleConfigEditActivity::class.java)
+            if (existing != null) {
+                intent.putExtra(TailscaleConfigEditActivity.EXTRA_CONFIG_ID, existing.id)
+            }
+            startActivity(intent)
+        }
+    }
+
+    /** 已有 EasyTier 配置则回填编辑，没有则新建 */
+    private fun openEasyTierConfig() {
+        lifecycleScope.launch {
+            val existing = db.easytierConfigDao().getAll().firstOrNull()
+            val intent = Intent(this@MainActivity, EasyTierConfigEditActivity::class.java)
+            if (existing != null) {
+                intent.putExtra(EasyTierConfigEditActivity.EXTRA_CONFIG_ID, existing.id)
+            }
+            startActivity(intent)
         }
     }
 

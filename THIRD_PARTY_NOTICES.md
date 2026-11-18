@@ -25,6 +25,8 @@ PeerRDP（下称“本项目”）的分发物包含下列第三方软件。本�
 | gVisor netstack | 随 tsnet 1.104.0 | Apache-2.0 | 静态链接进 `libgojni.so` |
 | Go 运行时 / 标准库 | 1.27.1 | BSD-3-Clause | 静态链接进 `libgojni.so` |
 | gomobile / gobind 生成代码 | latest | BSD-3-Clause | `classes.jar`（`tsnet.aar`） |
+| EasyTier（`libeasytier_ffi`、`libeasytier_android_jni`） | 2.6.4 | LGPL-3.0 | 原生库（`app/src/main/jniLibs/arm64-v8a/`） |
+| EasyTier Kotlin JNI 门面 | 2.6.4 | LGPL-3.0 | dex（`com.easytier.jni.EasyTierJNI`） |
 
 > 完整的传递依赖清单可在仓库根目录执行 `./gradlew :app:dependencies --configuration releaseRuntimeClasspath` 获取；其中 AndroidX、Kotlin 相关依赖均为 Apache-2.0。tsnet 的 Go 依赖清单见 `tsnet-android/go.mod` / `go.sum`。
 
@@ -630,3 +632,16 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
+
+## 13. GNU Lesser General Public License 3.0 —— EasyTier
+
+`libeasytier_ffi.so` 与 `libeasytier_android_jni.so` 由 EasyTier v2.6.4 源码构建，未修改上游源码，以**独立共享库**形式动态链接（不静态链接进应用自有 `.so`）。LGPL-3.0 完整条款见 [licenses/LGPL-3.0.txt](licenses/LGPL-3.0.txt)。
+
+- 版权：Copyright (C) EasyTier contributors
+- 上游仓库：<https://github.com/EasyTier/EasyTier>
+- 对应源码：<https://github.com/EasyTier/EasyTier/tree/v2.6.4>
+- 构建脚本：[`scripts/build-easytier-so.sh`](scripts/build-easytier-so.sh)，编译参数见 [SOURCE.md](SOURCE.md) §6
+- Kotlin 门面：`app/src/main/java/com/easytier/jni/EasyTierJNI.kt` 仅保留 v1 所需的 native 方法声明，按 LGPL-3.0 使用
+
+**可替换性**：两个 `.so` 是 APK 内的独立文件，未做静态链接或混淆处理；任何第三方都可用相同 ABI（`arm64-v8a`）的 EasyTier v2.6.4 构建产物替换后重新打包 APK。重建步骤见 [SOURCE.md](SOURCE.md) §6。
+

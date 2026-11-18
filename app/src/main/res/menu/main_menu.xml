@@ -6,4 +6,9 @@
         android:id="@+id/action_tailscale"
         android:title="Tailscale 配置"
         app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_easytier"
+        android:title="EasyTier 配置"
+        app:showAsAction="never" />
 </menu>

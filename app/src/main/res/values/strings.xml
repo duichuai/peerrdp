@@ -17,6 +17,8 @@
     <string name="field_password">密码（留空则连接时询问）</string>
     <string name="field_domain">域名（可选）</string>
     <string name="field_resolution">分辨率</string>
+    <string name="field_network_mode">组网方式</string>
+    <string name="network_direct">直连（不使用组网）</string>
 
     <string name="save">保存</string>
     <string name="saved">已保存</string>

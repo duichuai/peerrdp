@@ -1,6 +1,6 @@
 # PeerRDP
 
-PeerRDP 是一个面向 Android 的远程桌面（RDP）客户端。引擎基于 [FreeRDP](https://github.com/FreeRDP/FreeRDP) 3.33.0，以预编译 AAR 形式集成；应用层使用 Kotlin + Room。可选集成 Tailscale（tsnet）组网：在自托管 Headscale 的 tailnet 中，通过应用内本地 SOCKS5 代理连接目标主机。
+PeerRDP 是一个面向 Android 的远程桌面（RDP）客户端。引擎基于 [FreeRDP](https://github.com/FreeRDP/FreeRDP) 3.33.0，以预编译 AAR 形式集成；应用层使用 Kotlin + Room。可选集成 Tailscale（tsnet）或 [EasyTier](https://github.com/EasyTier/EasyTier) 组网：通过应用内本地 SOCKS5 代理连接目标主机。
 
 > 本项目为独立开发，与 FreeRDP、Tailscale 项目无隶属或背书关系。
 
@@ -12,6 +12,7 @@ PeerRDP 是一个面向 Android 的远程桌面（RDP）客户端。引擎基于
 - 英文/符号键直接发送扫描码；中文请使用远端输入法上屏
 - 连接配置复制后新建
 - Tailscale（可选）：保存 Headscale 控制面 URL / pre-auth key / 节点名，RDP 连接可绑定该配置；RDP 流量经应用内 tsnet 的本地 SOCKS5 代理进入 tailnet（用户态运行，不申请 `VpnService`，不与系统其他 VPN 冲突）
+- EasyTier（可选）：保存网络名 / 网络密钥 / 对等节点，RDP 连接可绑定该配置；以 no_tun 模式运行并将流量交给内置 SOCKS5，同样不申请 `VpnService`。与 Tailscale 配置互斥
 
 ## Tailscale 组网（可选）
 
@@ -23,6 +24,17 @@ PeerRDP 是一个面向 Android 的远程桌面（RDP）客户端。引擎基于
 
 当前限制：没有前台服务与状态页，应用进程被系统回收后 tsnet 随之停止；界面只提供单套 tsnet 配置的快捷编辑，暂不支持配置列表与删除。
 
+## EasyTier 组网（可选）
+
+1. 准备一个 EasyTier 公共节点或按官方文档自建 public server（例如 `tcp://your-vps:11010`），作为双方的对等节点。
+2. 目标 Windows 主机安装 [EasyTier](https://github.com/EasyTier/EasyTier/releases)（GUI 或命令行均可），用相同的网络名与网络密钥加入网络，保持在线。
+3. 在 Windows 端查看本机虚拟 IP：EasyTier GUI 的节点列表，或 CLI 执行 `easytier-cli node`，记下 `virtual_ipv4`（默认 `10.144.144.x` 网段）。
+4. 打开主界面右上角菜单 →「EasyTier 配置」，填写名称、网络名、网络密钥、对等节点（每行一条），虚拟 IP 默认 DHCP 自动分配；保存。
+5. 编辑 RDP 连接，在「组网方式」下拉框选择该 EasyTier 配置；主机地址填写目标主机的 EasyTier 虚拟 IP。
+6. 点击连接：应用启动 EasyTier 实例并等待就绪（最长 60 秒），随后通过 `127.0.0.1` 上的 SOCKS5 代理发起 RDP。
+
+当前限制：与 Tailscale 一样没有前台服务，进程被回收后实例停止；v1 仅 no_tun + SOCKS5，不会接管系统全局流量，因此只能访问 EasyTier 虚拟网络内的地址。
+
 ## 环境要求
 
 | 项 | 版本 |
@@ -32,6 +44,7 @@ PeerRDP 是一个面向 Android 的远程桌面（RDP）客户端。引擎基于
 | Gradle | 由 wrapper 提供（9.6.1） |
 | AGP | 9.2.1（AGP 9 已内置 Kotlin 支持） |
 | Go / gomobile | 仅重编 tsnet AAR 时需要：Go 1.27.1 + `golang.org/x/mobile` |
+| Rust / cargo-ndk | 仅重编 EasyTier 原生库时需要：Rust stable + `aarch64-linux-android`、cargo-ndk、NDK r28+、protoc |
 
 ## 构建
 
@@ -59,11 +72,18 @@ scripts/build-tsnet-aar.sh   # 产出并回填 app/libs/tsnet.aar + tsnet-source
 
 Go 模块下载通常需要代理（本机实测走 `socks5://192.168.56.1:1080`）。引擎重建需要 NDK 29.0.13113456、CMake 4.1.2、JDK 21；默认 FreeRDP 3.33.0 + OpenSSL 4.0.3，可用 `FREERDP_VERSION` / `OPENSSL_VERSION` 覆盖。
 
+EasyTier 原生库（`app/src/main/jniLibs/arm64-v8a/*.so`）已随仓库提供，日常构建无需重编。仅在升级 EasyTier 时需要重建（Rust stable + `aarch64-linux-android`、cargo-ndk、NDK r28+、protoc）：
+
+```bash
+scripts/build-easytier-so.sh   # 按固定 tag 构建并回填两个 .so，自动校验 16KB 页对齐
+```
+
 ## 目录结构
 
 ```
 app/          应用模块（Kotlin + Room）
 app/libs/     预编译引擎 AAR（freeRDPCore-release.aar）与 tsnet AAR（tsnet.aar）
+app/src/main/jniLibs/  EasyTier 原生库（arm64-v8a）
 scripts/      构建脚本
 docs/         技术设计文档
 ```
@@ -84,6 +104,7 @@ APK 仅申请下列权限。引擎 AAR 声明的相机、录音、外部存储�
 - 本项目自身代码：[Apache License 2.0](LICENSE)，Copyright 2026 duichuai。
 - 引擎 AAR（`app/libs/freeRDPCore-release.aar`）为第三方作品：FreeRDP 核心库与 C JNI 为 Apache-2.0；**`com.freerdp.freerdpcore` 的 Java/Kotlin 客户端代码为 MPL-2.0**（另有 2 个源自 AOSP 的文件为 Apache-2.0）。本项目未修改其源码。
 - tsnet AAR（`app/libs/tsnet.aar`）由 `tsnet-android` Go wrapper 构建，包含 Tailscale/tsnet（BSD-3-Clause）、wireguard-go（MIT）、gVisor（Apache-2.0）、Go 运行时与 gomobile（BSD-3-Clause），详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+- EasyTier 原生库（`app/src/main/jniLibs/arm64-v8a/libeasytier_*.so`）为 **LGPL-3.0**，由 EasyTier v2.6.4 源码构建且未修改上游代码；作为独立动态库分发，可按 [SOURCE.md](SOURCE.md) §6 重建替换，条款见 [licenses/LGPL-3.0.txt](licenses/LGPL-3.0.txt)。
 - 其余第三方组件（OpenSSL、cJSON、uriparser、SQLCipher、AndroidX、Kotlin 等）的许可证与声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 - MPL-2.0 组件的源码获取方式见 [SOURCE.md](SOURCE.md)。
 
@@ -97,6 +118,6 @@ APK 仅申请下列权限。引擎 AAR 声明的相机、录音、外部存储�
 
 - 仅构建 `arm64-v8a`。
 - release 使用固定 release 密钥（别名 `androiddebugkey`，密钥与口令不入库），仅适合侧载/自用，不适合上架应用商店。
-- 集成 tsnet 后 release APK 约 46MB，其中 `lib/arm64-v8a/libgojni.so` 约 30.5MB。
+- 集成 tsnet 与 EasyTier 后 release APK 约 59MB，其中 `lib/arm64-v8a/libgojni.so` 约 19MB、`libeasytier_ffi.so` 约 18MB。
 - 手机侧中文输入法直接上屏受引擎输入连接实现限制，建议使用远端输入法。
 - 若远端为 VirtualBox VRDE，默认只允许单连接，需开启多连接后才能与其他客户端并存。

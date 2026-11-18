@@ -44,7 +44,7 @@
 
 ### 2.2 许可与权限（2026-11-08）
 
-- 引擎 AAR 为混合许可：FreeRDP 核心与 C JNI 是 Apache-2.0，**freeRDPCore 的 Java/Kotlin（50 个文件）是 MPL-2.0**；OpenSSL 4.0.x、cJSON（MIT）、uriparser/SQLCipher（BSD-3）均宽松，无 GPL/LGPL。公开发布需补 LICENSE / THIRD_PARTY_NOTICES，并按 MPL §3.2 提供 AAR 源码获取方式（上游 tag + `scripts/build-freerdpcore-aar.sh` 的补丁清单）。
+- 引擎 AAR 为混合许可：FreeRDP 核心与 C JNI 是 Apache-2.0，**freeRDPCore 的 Java/Kotlin（50 个文件）是 MPL-2.0**；OpenSSL 4.0.x、cJSON（MIT）、uriparser/SQLCipher（BSD-3）均宽松。EasyTier 原生库为 LGPL-3.0（见 2.4）。公开发布需补 LICENSE / THIRD_PARTY_NOTICES，并按 MPL §3.2 提供 AAR 源码获取方式（上游 tag + `scripts/build-freerdpcore-aar.sh` 的补丁清单）。
 - 应用 manifest 用 `tools:node="remove"` 移除引擎合并进来的未使用权限：CAMERA、RECORD_AUDIO、READ/WRITE_EXTERNAL_STORAGE、POST_NOTIFICATIONS；保留 INTERNET、ACCESS_NETWORK_STATE、MODIFY_AUDIO_SETTINGS、ACCESS_WIFI_STATE。`build-app.sh` 构建后会校验权限清单。
 - 引擎/依赖版本已参数化：`build-freerdpcore-aar.sh` 默认 `FREERDP_VERSION=3.33.0`、`OPENSSL_VERSION=4.0.3`（可用同名环境变量覆盖）；缺源码时自动下载，并把版本与镜像实际 sha256 写入 `cmake/DepVersions.cmake`。**2026-11-08 已重编：仓库内 AAR 为 FreeRDP 3.33.0 + OpenSSL 4.0.3 的产物。**
 
@@ -64,6 +64,16 @@
 - 数据库升到 **v4**：`MIGRATION_2_3` 建 `tailscale_configs`，`MIGRATION_3_4` 给 `connections` 加 `tailscaleConfigId INTEGER NOT NULL DEFAULT 0`。
 - 已知问题与约束见 `docs/technical-design.md` §9；方案细节见 `docs/tailscale-integration-design.md`。
 
+### 2.4 EasyTier 集成（2026-11-18）
+
+- 原生库：`app/src/main/jniLibs/arm64-v8a/` 下的 `libeasytier_ffi.so`（18MB）、`libeasytier_android_jni.so`（6MB），由 EasyTier **v2.6.4**（`8428a89`）源码用 `scripts/build-easytier-so.sh` 构建（cargo-ndk + NDK r29，未修改上游源码），已入库。
+- 许可：LGPL-3.0。两个 `.so` 为独立动态库、未静态链接进应用自有库，且可被同 ABI 的自行构建产物替换；条款见 `licenses/LGPL-3.0.txt`，源码与构建参数见 `SOURCE.md` §6。
+- v1 只支持 **no_tun + 内置 SOCKS5**（不申请 VpnService）：`data/EasyTierConfigEntity` + `EasyTierConfigDao`（表 `easytier_configs`）；`easytier/EasyTierManager` 生成 TOML、分配本地端口、启动实例并轮询就绪（最长 60s，失败换端口重试一次）；`RdpConnector` 以 `proxy=socks5://127.0.0.1:<port>` 交给 FreeRDP。
+- `ConnectionEditActivity` 的组网方式改为「直连 / Tailscale / EasyTier」单一下拉框（两者互斥），`MainActivity` 菜单新增「EasyTier 配置」。
+- 数据库升到 **v5**：`MIGRATION_4_5` 建 `easytier_configs`，并给 `connections` 加 `easytierConfigId INTEGER NOT NULL DEFAULT 0`。
+- 原生库必须按 16KB 页对齐链接（`-Wl,-z,max-page-size=16384`）；`build-easytier-so.sh` 与 `build-app.sh` 都会校验 LOAD 段对齐与 APK 的 `zipalign -c -P 16`。
+- 方案细节见 `docs/easytier-integration-design.md`。
+
 ## 3. 持久化布局（重启不丢）
 
 | 内容 | 位置 |
@@ -74,6 +84,7 @@
 | 引擎源码 + 原生依赖镜像 | `peerrdp/deps/`（不入 git；仅重编 AAR 时需要，脚本可自动下载） |
 | tsnet Go wrapper 源码 | `peerrdp/tsnet-android/`（已入库；仅重编 `app/libs/tsnet.aar` 时需要） |
 | 预编译 AAR | `peerrdp/app/libs/freeRDPCore-release.aar`、`peerrdp/app/libs/tsnet.aar`、`tsnet-sources.jar` |
+| EasyTier 原生库（已入库） | `peerrdp/app/src/main/jniLibs/arm64-v8a/`（构建源码/缓存放 `/tmp/peerrdp-easytier-build`，不入库） |
 | 可选本地 Maven 补充仓库 | 环境变量 `LOCAL_MAVEN_REPO` 指定的目录（缺省不使用） |
 | 构建工作区 | `/tmp/peerrdp-app-build`、`/tmp/peerrdp-build`（tmpfs，重启即失，rsync 可重建，属正常） |
 
@@ -89,6 +100,10 @@ scripts/build-freerdpcore-aar.sh
 
 # 重编 tsnet AAR（仅当 tailscale 版本/Go wrapper 变更时才需要）
 scripts/build-tsnet-aar.sh
+
+# 重编 EasyTier 原生库（仅当 EasyTier 版本变更时才需要；产物回填 jniLibs）
+# 前置：Rust stable + aarch64-linux-android、cargo-ndk、NDK r28+、protoc
+scripts/build-easytier-so.sh
 ```
 
 ## 5. 勿回退约束（踩坑结论）

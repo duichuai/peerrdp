@@ -2,6 +2,9 @@
 -keep class com.freerdp.freerdpcore.services.LibFreeRDP { *; }
 -keepclasseswithmembernames,includedescriptorclasses class * { native <methods>; }
 
+# EasyTier JNI：native 方法按名称绑定，类名/方法名不能混淆
+-keep class com.easytier.jni.** { *; }
+
 # 布局 XML 里以类名引用的自定义 View（SessionView / TouchPointerView / ScrollView2D 等）
 -keep public class * extends android.view.View {
     public <init>(android.content.Context);

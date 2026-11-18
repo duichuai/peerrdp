@@ -11,6 +11,7 @@ import androidx.lifecycle.lifecycleScope
 import com.peerrdp.R
 import com.peerrdp.data.AppDatabase
 import com.peerrdp.data.ConnectionEntity
+import com.peerrdp.data.EasyTierConfigEntity
 import com.peerrdp.data.TailscaleConfigEntity
 import com.peerrdp.databinding.ActivityConnectionEditBinding
 import kotlinx.coroutines.launch
@@ -29,7 +30,9 @@ class ConnectionEditActivity : AppCompatActivity() {
     private lateinit var resolutionLabels: Array<String>
     private lateinit var resolutionValues: Array<String>
     private var tailscaleConfigs: List<TailscaleConfigEntity> = emptyList()
+    private var easytierConfigs: List<EasyTierConfigEntity> = emptyList()
     private var selectedTailscaleId: Long = 0
+    private var selectedEasyTierId: Long = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,13 +51,13 @@ class ConnectionEditActivity : AppCompatActivity() {
 
         binding.btnSave.setOnClickListener { save() }
 
-        // 顺序加载：先取 Tailscale 配置，再取连接回显，避免异步竞态覆盖 selectedTailscaleId
+        // 顺序加载：先取组网配置，再取连接回显，避免异步竞态覆盖选中项
         val id = intent.getLongExtra(EXTRA_CONNECTION_ID, -1L)
         val copyFromId = intent.getLongExtra(EXTRA_COPY_FROM_ID, -1L)
         lifecycleScope.launch {
-            val configs = db.tailscaleConfigDao().getAll()
-            tailscaleConfigs = configs
-            setupTailscaleSpinner(configs)
+            tailscaleConfigs = db.tailscaleConfigDao().getAll()
+            easytierConfigs = db.easytierConfigDao().getAll()
+            setupNetworkSpinner()
 
             val entity = when {
                 copyFromId > 0 -> db.connectionDao().getById(copyFromId)
@@ -65,30 +68,49 @@ class ConnectionEditActivity : AppCompatActivity() {
         }
     }
 
-    /** 设置 Tailscale 配置下拉框；在协程内同步设置选中项，避免回调覆盖 selectedTailscaleId */
-    private fun setupTailscaleSpinner(configs: List<TailscaleConfigEntity>) {
-        val items = mutableListOf("不使用 Tailscale（直连）")
-        items.addAll(configs.map { "${it.name} (${it.controlURL})" })
+    /**
+     * 设置组网方式下拉框：直连 / Tailscale 配置 / EasyTier 配置。
+     * 三种方式互斥，选中项分别映射到 tailscaleConfigId 或 easytierConfigId。
+     */
+    private fun setupNetworkSpinner() {
+        val items = mutableListOf(getString(R.string.network_direct))
+        items.addAll(tailscaleConfigs.map { "Tailscale - ${it.name}" })
+        items.addAll(easytierConfigs.map { "EasyTier - ${it.name}" })
         val adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_item,
             items
         )
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        binding.spinTailscale.adapter = adapter
+        binding.spinNetwork.adapter = adapter
 
-        // 先设置 listener，再 setSelection，确保回调正常更新 selectedTailscaleId
-        binding.spinTailscale.onItemSelectedListener =
+        // 先设置 listener，再 setSelection，确保回调正常更新选中项
+        binding.spinNetwork.onItemSelectedListener =
             object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
-                    selectedTailscaleId = if (pos == 0) 0 else configs[pos - 1].id
+                    val tsCount = tailscaleConfigs.size
+                    when {
+                        pos == 0 -> {
+                            selectedTailscaleId = 0
+                            selectedEasyTierId = 0
+                        }
+                        pos <= tsCount -> {
+                            selectedTailscaleId = tailscaleConfigs[pos - 1].id
+                            selectedEasyTierId = 0
+                        }
+                        else -> {
+                            selectedTailscaleId = 0
+                            selectedEasyTierId = easytierConfigs[pos - 1 - tsCount].id
+                        }
+                    }
                 }
 
                 override fun onNothingSelected(p: AdapterView<*>?) {
                     selectedTailscaleId = 0
+                    selectedEasyTierId = 0
                 }
             }
-        binding.spinTailscale.setSelection(0)
+        binding.spinNetwork.setSelection(0)
     }
 
     /** 回显连接配置；copy=true 时作为复制模板，保存时新建而非覆盖 */
@@ -108,11 +130,17 @@ class ConnectionEditActivity : AppCompatActivity() {
         binding.etDomain.setText(entity.domain)
         selectResolution(entity.resolution)
 
-        // 回显 Tailscale 选中项：根据 tailscaleConfigId 找到对应位置
-        val idx = tailscaleConfigs.indexOfFirst { it.id == entity.tailscaleConfigId }
-        val pos = if (idx >= 0) idx + 1 else 0
-        binding.spinTailscale.setSelection(pos)
-        selectedTailscaleId = entity.tailscaleConfigId
+        // 回显组网方式选中项：Tailscale 与 EasyTier 在同一个下拉框中互斥
+        val tsIdx = tailscaleConfigs.indexOfFirst { it.id == entity.tailscaleConfigId }
+        val etIdx = easytierConfigs.indexOfFirst { it.id == entity.easytierConfigId }
+        val pos = when {
+            tsIdx >= 0 -> tsIdx + 1
+            etIdx >= 0 -> tailscaleConfigs.size + etIdx + 1
+            else -> 0
+        }
+        binding.spinNetwork.setSelection(pos)
+        selectedTailscaleId = if (tsIdx >= 0) entity.tailscaleConfigId else 0
+        selectedEasyTierId = if (etIdx >= 0) entity.easytierConfigId else 0
 
         supportActionBar?.setTitle(
             if (copy) R.string.title_copy_connection else R.string.title_edit_connection
@@ -146,6 +174,7 @@ class ConnectionEditActivity : AppCompatActivity() {
             resolution = resolutionValues.getOrNull(resolutionIndex)
                 ?: ConnectionEntity.RESOLUTION_ADAPTIVE,
             tailscaleConfigId = selectedTailscaleId,
+            easytierConfigId = selectedEasyTierId,
             createdAt = old?.createdAt ?: System.currentTimeMillis(),
             lastUsedAt = old?.lastUsedAt ?: 0
         )

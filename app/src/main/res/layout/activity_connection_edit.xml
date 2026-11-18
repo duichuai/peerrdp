@@ -119,12 +119,12 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:text="Tailscale 配置"
+                android:text="@string/field_network_mode"
                 android:textSize="14sp"
                 android:textColor="?android:attr/textColorSecondary" />
 
             <Spinner
-                android:id="@+id/spinTailscale"
+                android:id="@+id/spinNetwork"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp" />

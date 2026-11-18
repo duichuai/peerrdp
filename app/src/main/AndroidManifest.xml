@@ -41,5 +41,10 @@
             android:name=".tailscale.TailscaleConfigEditActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".easytier.EasyTierConfigEditActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>
