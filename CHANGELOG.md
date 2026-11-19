@@ -6,6 +6,14 @@
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 发布产物由 GitHub Actions 在推送 `v*` tag 时自动构建并附加 APK。
 
+## [2.3.1] - 2026-11-19
+
+### 修复
+- 修复在不支持 Unicode 键盘事件的 RDP 服务器（如 VirtualBox VRDP）上无法输入中文等非 ASCII 文本的问题：服务器能力协商会关闭客户端的 Unicode 输入，原扫描码回退无法表示 CJK 字符导致被丢弃；现检测到服务器不支持 Unicode 键盘输入且提交文本含非 ASCII 字符时，回退为「写入共享剪贴板 + Ctrl+V」上屏（剪贴板通道在这些服务器上始终可用）
+
+### 构建
+- 重编 freeRDPCore AAR（补丁 11/11 更新：`SessionInputManager` 新增剪贴板粘贴回退）
+
 ## [2.3.0] - 2026-11-19
 
 ### 新增
