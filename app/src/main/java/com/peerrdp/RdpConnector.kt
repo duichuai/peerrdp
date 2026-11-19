@@ -33,6 +33,9 @@ object RdpConnector {
             .path("connect")
 
         builder.appendQueryParameter("size", desktopSize(context, conn.resolution))
+        // 客户端输入法上屏依赖 RDP Unicode 按键事件；FreeRDP 默认关闭，需显式开启。
+        // 对应命令行 /kbd:unicode:on，未开启时 Unicode 事件会被库直接丢弃。
+        builder.appendQueryParameter("kbd", "unicode:on")
         if (password.isNotEmpty()) {
             builder.appendQueryParameter("p", password)
         }
