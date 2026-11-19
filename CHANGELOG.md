@@ -6,6 +6,14 @@
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 发布产物由 GitHub Actions 在推送 `v*` tag 时自动构建并附加 APK。
 
+## [2.3.6] - 2026-11-19
+
+### 修复
+- 修复 VirtualBox VRDP 上中文输入只出数字的问题：`pasteTextViaClipboard` 阻塞 UI/IME 线程（最多 2 秒）导致输入法行为异常、粘贴失败；改由独立 `HandlerThread` 后台线程执行粘贴，UI 线程立即返回
+
+### 构建
+- 重编 freeRDPCore AAR（补丁 11/11：SessionInputManager 新增 PasteThread 后台线程）
+
 ## [2.3.5] - 2026-11-19
 
 ### 修复

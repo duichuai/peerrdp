@@ -531,6 +531,11 @@ with open(input_path, encoding='utf-8') as f:
 if 'onSessionViewCommitText' in inp:
     print('    SessionInputManager 已打过补丁')
 else:
+    # HandlerThread 用于后台执行剪贴板粘贴（pasteTextViaClipboard 会阻塞）
+    old_imp = 'import android.os.Handler;\n'
+    assert old_imp in inp, 'SessionInputManager Handler import 缺失'
+    inp = inp.replace(old_imp, old_imp + 'import android.os.HandlerThread;\n', 1)
+
     old = '\tprivate static final int MOVE_EVENT_THROTTLE_MS = 16;\n'
     assert old in inp, 'SessionInputManager 常量区缺失（上游结构变化？）'
     inp = inp.replace(old,
@@ -544,7 +549,22 @@ else:
         + '\tprivate static final int VK_DELETE = 0x2E | 0x0100;\n'
         + '\t// VK_LCONTROL / VK_V 用于剪贴板粘贴回退（Ctrl+V）。\n'
         + '\tprivate static final int VK_LCONTROL = 0xA2;\n'
-        + '\tprivate static final int VK_V = 0x56;\n', 1)
+        + '\tprivate static final int VK_V = 0x56;\n'
+        + '\t// 后台线程执行剪贴板粘贴：pasteTextViaClipboard 会阻塞等待服务器确认，\n'
+        + '\t// 不能在 UI/IME 线程执行，否则会导致 ANR 或输入法行为异常。\n'
+        + '\tprivate HandlerThread pasteThread;\n'
+        + '\tprivate Handler pasteHandler;\n'
+        + '\n'
+        + '\tprivate Handler getPasteHandler()\n'
+        + '\t{\n'
+        + '\t\tif (pasteThread == null)\n'
+        + '\t\t{\n'
+        + '\t\t\tpasteThread = new HandlerThread("PasteThread");\n'
+        + '\t\t\tpasteThread.start();\n'
+        + '\t\t\tpasteHandler = new Handler(pasteThread.getLooper());\n'
+        + '\t\t}\n'
+        + '\t\treturn pasteHandler;\n'
+        + '\t}\n', 1)
 
     old = (
         '\t@Override public boolean isUnicodeInputSupported()\n'
@@ -564,10 +584,18 @@ else:
         '\t\t// 不支持 Unicode 键盘事件的服务器（如 VirtualBox VRDP）：含非 ASCII 字符时\n'
         '\t\t// 整段走 native pasteTextViaClipboard（写剪贴板 + Ctrl+V，并等待服务器确认\n'
         '\t\t// 收到数据后才返回），杜绝连续粘贴时剪贴板内容互相覆盖、次序错乱。\n'
+        '\t\t// 粘贴操作在后台线程执行，避免阻塞 UI/IME 线程导致 ANR 或输入法异常。\n'
         '\t\tif (!LibFreeRDP.isUnicodeInputSupported(instance) &&\n'
         '\t\t    containsNonAsciiPrintable(text))\n'
         '\t\t{\n'
-        '\t\t\tLibFreeRDP.pasteTextViaClipboard(instance, text.toString());\n'
+        '\t\t\tfinal String data = text.toString();\n'
+        '\t\t\tgetPasteHandler().post(new Runnable()\n'
+        '\t\t\t{\n'
+        '\t\t\t\t@Override public void run()\n'
+        '\t\t\t\t{\n'
+        '\t\t\t\t\tLibFreeRDP.pasteTextViaClipboard(instance, data);\n'
+        '\t\t\t\t}\n'
+        '\t\t\t});\n'
         '\t\t\treturn true;\n'
         '\t\t}\n'
         '\t\tfor (int i = 0; i < text.length(); i++)\n'
