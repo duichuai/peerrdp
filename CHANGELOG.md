@@ -13,6 +13,7 @@
   - 退格/向后删除发送 `VK_BACK` / 扩展 `VK_DELETE`，输入法回车发送 `VK_RETURN`
   - 组词与候选框保留在客户端，仅上屏文本进入远端
 - 连接编辑新增更大分辨率：2560×1600、2880×1800、3440×1440、3840×2160
+- 新增「问题反馈」入口（主界面菜单 → 问题反馈）：填写问题/需求描述与联系方式，可附带设备信息、logcat 与应用日志文件，经系统分享或邮件发送
 
 ### 构建
 - `scripts/build-freerdpcore-aar.sh` 新增补丁 11/11（`SessionView` / `SessionInputManager` 客户端文本输入），并重编 freeRDPCore AAR

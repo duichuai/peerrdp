@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 反馈文件生成在 cacheDir/feedback/，通过 FileProvider 临时授权给分享目标 -->
+    <cache-path
+        name="feedback"
+        path="feedback/" />
+</paths>

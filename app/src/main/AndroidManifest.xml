@@ -47,6 +47,22 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".feedback.FeedbackActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 反馈附件通过 FileProvider 临时授权给分享目标应用 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.feedback.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- 引擎 AAR 默认导出以下组件（SessionActivity 还注册了 freerdp:// 的 BROWSABLE
              intent-filter）。本应用不提供对应入口，全部关闭导出以缩小攻击面；
              SessionActivity 由 RdpConnector 显式启动，不受 exported 影响。 -->

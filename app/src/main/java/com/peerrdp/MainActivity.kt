@@ -25,6 +25,7 @@ import com.peerrdp.databinding.ActivityMainBinding
 import com.peerrdp.databinding.ItemConnectionBinding
 import com.peerrdp.edit.ConnectionEditActivity
 import com.peerrdp.easytier.EasyTierConfigEditActivity
+import com.peerrdp.feedback.FeedbackActivity
 import com.peerrdp.tailscale.TailscaleConfigEditActivity
 import kotlinx.coroutines.launch
 
@@ -70,6 +71,10 @@ class MainActivity : AppCompatActivity() {
         }
         R.id.action_easytier -> {
             openEasyTierConfig()
+            true
+        }
+        R.id.action_feedback -> {
+            startActivity(Intent(this, FeedbackActivity::class.java))
             true
         }
         R.id.action_about -> {

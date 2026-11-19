@@ -30,6 +30,23 @@
     <string name="delete">删除</string>
     <string name="delete_confirm">确定删除连接「%1$s」？</string>
 
+    <string name="action_feedback">问题反馈</string>
+    <string name="title_feedback">问题 / 需求反馈</string>
+    <string name="feedback_type">反馈类型</string>
+    <string name="feedback_type_issue">问题</string>
+    <string name="feedback_type_request">需求建议</string>
+    <string name="feedback_description">问题或需求描述</string>
+    <string name="feedback_contact">联系方式（可选）</string>
+    <string name="feedback_include_logs">附带客户端日志与设备信息</string>
+    <string name="feedback_logs_note">日志可能包含主机地址、节点信息与网络状态，请确认后再提交。</string>
+    <string name="feedback_submit">提交</string>
+    <string name="feedback_description_required">请填写问题或需求描述</string>
+    <string name="feedback_collecting">正在收集日志…</string>
+    <string name="feedback_collect_failed">生成反馈文件失败：%1$s</string>
+    <string name="feedback_no_app">没有找到可接收反馈的应用</string>
+    <string name="feedback_share_title">选择反馈发送方式</string>
+    <string name="feedback_share_subject">PeerRDP 反馈：%1$s</string>
+
     <string name="error_host_required">请输入主机地址</string>
     <string name="error_port_invalid">端口需为 1-65535</string>
     <string name="enter_password_title">输入 %1$s 的密码</string>
