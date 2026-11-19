@@ -6,6 +6,14 @@
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 发布产物由 GitHub Actions 在推送 `v*` tag 时自动构建并附加 APK。
 
+## [2.3.3] - 2026-11-19
+
+### 修复
+- 所有可打印文本（ASCII 与非 ASCII）统一走「写剪贴板 + Ctrl+V」上屏，不再区分 ASCII/非 ASCII：避免受控端开启中文输入法时，ASCII 扫描码被远端 IME 拦截组词导致输入异常；仅回车、制表符等控制字符仍走虚拟键
+
+### 构建
+- 重编 freeRDPCore AAR（补丁 11/11 更新：`SessionInputManager` 简化 commitText 逻辑）
+
 ## [2.3.2] - 2026-11-19
 
 ### 修复
