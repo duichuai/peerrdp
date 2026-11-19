@@ -6,6 +6,14 @@
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 发布产物由 GitHub Actions 在推送 `v*` tag 时自动构建并附加 APK。
 
+## [2.3.8] - 2026-11-19
+
+### 变更
+- 回退客户端输入法文本输入，改用受控端输入法：`onCreateInputConnection` 恢复上游 `TYPE_NULL` + `BaseInputConnection`，本地输入法不再拦截文本，按键直接发往远端，由远程机器的输入法处理中文输入
+
+### 构建
+- 重编 freeRDPCore AAR（补丁 11/11：SessionView InputConnection 回退）
+
 ## [2.3.7] - 2026-11-19
 
 ### 修复
