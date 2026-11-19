@@ -6,6 +6,22 @@
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 发布产物由 GitHub Actions 在推送 `v*` tag 时自动构建并附加 APK。
 
+## [2.1.2] - 2026-11-19
+
+### 安全
+- 升级 FreeRDP 3.33.0 → 3.33.1，修复 11 个安全公告（含客户端侧 use-after-free、越界读等）
+- 升级 uriparser 1.0.2 → 1.0.3，修复 CVE-2026-48841（`ComposeQueryEngine` 整数溢出），并重编 freeRDPCore AAR
+- 关闭 `allowBackup`，避免包含 RDP 密码、Tailscale pre-auth key、EasyTier 网络密钥的数据库随系统备份外泄
+- 引擎 AAR 合并的 6 个导出组件（含带 `freerdp://` BROWSABLE intent-filter 的 SessionActivity）改为不导出
+
+### 修复
+- 修正 EasyTier 原生库版本：此前 `.so` 实际为 v2.6.4，现按 v2.7.1 源码重编（版本串 `EasyTier-v2.7.1`）
+  - v2.7.1 的 JNI 库改为静态链接 `easytier-ffi`，两个 `.so` 与 APK 体积相应增大
+
+### 构建
+- `scripts/build-freerdpcore-aar.sh` 默认 FreeRDP 改为 3.33.1、uriparser 改为 1.0.3
+- README/BUILD/SOURCE/THIRD_PARTY_NOTICES/设计文档同步引擎版本与重编日期
+
 ## [2.1.1] - 2026-11-19
 
 ### 变更
