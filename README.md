@@ -104,7 +104,7 @@ APK 仅申请下列权限。引擎 AAR 声明的相机、录音、外部存储�
 - 本项目自身代码：[Apache License 2.0](LICENSE)，Copyright 2026 duichuai。
 - 引擎 AAR（`app/libs/freeRDPCore-release.aar`）为第三方作品：FreeRDP 核心库与 C JNI 为 Apache-2.0；**`com.freerdp.freerdpcore` 的 Java/Kotlin 客户端代码为 MPL-2.0**（另有 2 个源自 AOSP 的文件为 Apache-2.0）。本项目未修改其源码。
 - tsnet AAR（`app/libs/tsnet.aar`）由 `tsnet-android` Go wrapper 构建，包含 Tailscale/tsnet（BSD-3-Clause）、wireguard-go（MIT）、gVisor（Apache-2.0）、Go 运行时与 gomobile（BSD-3-Clause），详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
-- EasyTier 原生库（`app/src/main/jniLibs/arm64-v8a/libeasytier_*.so`）为 **LGPL-3.0**，由 EasyTier v2.6.4 源码构建且未修改上游代码；作为独立动态库分发，可按 [SOURCE.md](SOURCE.md) §6 重建替换，条款见 [licenses/LGPL-3.0.txt](licenses/LGPL-3.0.txt)。
+- EasyTier 原生库（`app/src/main/jniLibs/arm64-v8a/libeasytier_*.so`）为 **LGPL-3.0**，由 EasyTier v2.7.1 源码构建且未修改上游代码；作为独立动态库分发，可按 [SOURCE.md](SOURCE.md) §6 重建替换，条款见 [licenses/LGPL-3.0.txt](licenses/LGPL-3.0.txt)。
 - 其余第三方组件（OpenSSL、cJSON、uriparser、SQLCipher、AndroidX、Kotlin 等）的许可证与声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 - MPL-2.0 组件的源码获取方式见 [SOURCE.md](SOURCE.md)。
 

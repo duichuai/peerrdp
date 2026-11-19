@@ -50,7 +50,7 @@ AAR 由上述源码构建，构建期共应用 9 处补丁，全部为构建配�
 | cJSON | 1.7.19 | https://github.com/DaveGamble/cJSON |
 | uriparser | 1.0.2 | https://github.com/uriparser/uriparser |
 | SQLCipher | 4.17.0 | https://github.com/sqlcipher/sqlcipher |
-| EasyTier | 2.6.4 | https://github.com/EasyTier/EasyTier |
+| EasyTier | 2.7.1 | https://github.com/EasyTier/EasyTier |
 
 ## 5. 书面要约
 
@@ -59,9 +59,9 @@ AAR 由上述源码构建，构建期共应用 9 处补丁，全部为构建配�
 ## 6. EasyTier（LGPL-3.0）
 
 `app/src/main/jniLibs/arm64-v8a/` 下的 `libeasytier_ffi.so`、`libeasytier_android_jni.so`
-由 EasyTier `v2.6.4`（tag 提交 `8428a89d2dabc94c97d370ec607c6ca142473626`）源码构建，**未修改上游源码**。
+由 EasyTier `v2.7.1`（tag 提交 `0d9c52b169dc2112687ddefcf571cd01d383193c`）源码构建，**未修改上游源码**。
 
-- 源码：<https://github.com/EasyTier/EasyTier/tree/v2.6.4>
+- 源码：<https://github.com/EasyTier/EasyTier/tree/v2.7.1>
 - 构建脚本：[`scripts/build-easytier-so.sh`](scripts/build-easytier-so.sh)
 - 构建命令（脚本等价内容）：
 

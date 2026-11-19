@@ -3,7 +3,7 @@ package com.easytier.jni
 /**
  * EasyTier JNI 门面，仅保留 v1 需要的方法声明。
  *
- * 方法名与签名必须与 EasyTier v2.6.4
+ * 方法名与签名必须与 EasyTier v2.7.1
  * `easytier-contrib/easytier-android-jni/src/lib.rs` 中的
  * `Java_com_easytier_jni_EasyTierJNI_*` 导出一致，类名/包名不能改动。
  * 上游该文件以 LGPL-3.0 分发，详见 THIRD_PARTY_NOTICES.md。

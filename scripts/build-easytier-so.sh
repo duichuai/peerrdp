@@ -10,7 +10,7 @@
 #
 # 用法：
 #   scripts/build-easytier-so.sh
-#   EASYTIER_VERSION=v2.6.4 WORKDIR=/tmp/peerrdp-easytier-build scripts/build-easytier-so.sh
+#   EASYTIER_VERSION=v2.7.1 WORKDIR=/tmp/peerrdp-easytier-build scripts/build-easytier-so.sh
 #
 # 前置条件：
 #   - Rust（rustup）+ aarch64-linux-android target
@@ -22,7 +22,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-EASYTIER_VERSION="${EASYTIER_VERSION:-v2.6.4}"
+EASYTIER_VERSION="${EASYTIER_VERSION:-v2.7.1}"
 WORKDIR="${WORKDIR:-/tmp/peerrdp-easytier-build}"
 SRC="$WORKDIR/EasyTier-$EASYTIER_VERSION"
 GIT_URL="${EASYTIER_GIT_URL:-https://github.com/EasyTier/EasyTier.git}"
@@ -89,11 +89,10 @@ log "构建 libeasytier_ffi.so（$ANDROID_ABI）"
   cargo ndk -t "$ANDROID_ABI" --platform "$PLATFORM" build --release)
 
 log "构建 libeasytier_android_jni.so（$ANDROID_ABI）"
-# JNI 库通过 extern C 调用 ffi 的符号，显式链接以便生成 DT_NEEDED，
-# 运行时由 Android 动态链接器从 APK 的 lib 目录加载 libeasytier_ffi.so。
-JNI_RUSTFLAGS="$RUSTFLAGS -C link-arg=-L$SRC/target/$RUST_TARGET/release -C link-arg=-leasytier_ffi"
+# v2.7.1 起 JNI crate 通过 Cargo 依赖（rlib）静态引入 easytier-ffi，
+# 不再需要手工 -leasytier_ffi；共享 target 目录可复用首次构建的依赖缓存。
 (cd "$SRC/easytier-contrib/easytier-android-jni" && \
-  RUSTFLAGS="$JNI_RUSTFLAGS" cargo ndk -t "$ANDROID_ABI" --platform "$PLATFORM" build --release)
+  cargo ndk -t "$ANDROID_ABI" --platform "$PLATFORM" build --release)
 
 # ---------------------------------------------------------------- 回填
 log "回填 .so 到 $OUT_DIR"

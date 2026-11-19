@@ -25,8 +25,8 @@ PeerRDP（下称“本项目”）的分发物包含下列第三方软件。本�
 | gVisor netstack | 随 tsnet 1.104.0 | Apache-2.0 | 静态链接进 `libgojni.so` |
 | Go 运行时 / 标准库 | 1.27.1 | BSD-3-Clause | 静态链接进 `libgojni.so` |
 | gomobile / gobind 生成代码 | latest | BSD-3-Clause | `classes.jar`（`tsnet.aar`） |
-| EasyTier（`libeasytier_ffi`、`libeasytier_android_jni`） | 2.6.4 | LGPL-3.0 | 原生库（`app/src/main/jniLibs/arm64-v8a/`） |
-| EasyTier Kotlin JNI 门面 | 2.6.4 | LGPL-3.0 | dex（`com.easytier.jni.EasyTierJNI`） |
+| EasyTier（`libeasytier_ffi`、`libeasytier_android_jni`） | 2.7.1 | LGPL-3.0 | 原生库（`app/src/main/jniLibs/arm64-v8a/`） |
+| EasyTier Kotlin JNI 门面 | 2.7.1 | LGPL-3.0 | dex（`com.easytier.jni.EasyTierJNI`） |
 
 > 完整的传递依赖清单可在仓库根目录执行 `./gradlew :app:dependencies --configuration releaseRuntimeClasspath` 获取；其中 AndroidX、Kotlin 相关依赖均为 Apache-2.0。tsnet 的 Go 依赖清单见 `tsnet-android/go.mod` / `go.sum`。
 
