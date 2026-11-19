@@ -6,6 +6,14 @@
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 发布产物由 GitHub Actions 在推送 `v*` tag 时自动构建并附加 APK。
 
+## [2.3.5] - 2026-11-19
+
+### 修复
+- 修复 VirtualBox VRDP 等服务器上剪贴板粘贴失败：cliprdr 通道的 FormatList 与输入通道的 Ctrl+V 跨通道乱序，服务器可能先处理 Ctrl+V 再收到 FormatList，导致远端粘贴时无剪贴板数据；现 `pasteTextViaClipboard` 先等待服务器 `FormatListResponse` 确认再发送 Ctrl+V
+
+### 构建
+- 重编 freeRDPCore AAR（native 新增 `pasteFormatListAckEvent` 跨通道同步）
+
 ## [2.3.4] - 2026-11-19
 
 ### 修复
