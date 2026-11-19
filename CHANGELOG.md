@@ -6,6 +6,14 @@
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 发布产物由 GitHub Actions 在推送 `v*` tag 时自动构建并附加 APK。
 
+## [2.3.7] - 2026-11-19
+
+### 修复
+- 回退剪贴板粘贴为 Java 方式（`sendClipboardData` + Ctrl+V via `processVirtualKey`），native `pasteTextViaClipboard` 在 VRDP 上无法完成粘贴（仅出数字）；保留 PasteThread 后台执行避免阻塞 UI，并加 50ms（剪贴板→Ctrl+V）+ 200ms（Ctrl+V→下一次）延迟缓解次序问题
+
+### 构建
+- 重编 freeRDPCore AAR（补丁 11/11：SessionInputManager 粘贴改回 Java 方式）
+
 ## [2.3.6] - 2026-11-19
 
 ### 修复
