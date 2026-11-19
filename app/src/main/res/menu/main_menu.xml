@@ -11,4 +11,9 @@
         android:id="@+id/action_easytier"
         android:title="EasyTier 配置"
         app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_about"
+        android:title="关于"
+        app:showAsAction="never" />
 </menu>

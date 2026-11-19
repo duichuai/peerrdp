@@ -1,6 +1,7 @@
 package com.peerrdp
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
 import android.util.Log
@@ -71,7 +72,36 @@ class MainActivity : AppCompatActivity() {
             openEasyTierConfig()
             true
         }
+        R.id.action_about -> {
+            showAbout()
+            true
+        }
         else -> super.onOptionsItemSelected(item)
+    }
+
+    /** 关于：版本号、作者、GitHub、许可与免责声明 */
+    private fun showAbout() {
+        val pkg = packageManager.getPackageInfo(packageName, 0)
+        val version = "${pkg.versionName} (${pkg.longVersionCode})"
+        val message = buildString {
+            append("版本：$version\n")
+            append("作者：duichuai\n")
+            append("GitHub：https://github.com/duichuai/peerrdp\n")
+            append("开源许可：Apache License 2.0\n")
+            append("第三方组件：FreeRDP（Apache-2.0）、freeRDPCore（MPL-2.0）、Tailscale tsnet（BSD-3-Clause）、EasyTier（LGPL-3.0）\n")
+            append("\n免责声明：\n")
+            append("本应用为独立开发的远程桌面客户端，与 FreeRDP、Tailscale、EasyTier 等项目无隶属或背书关系。")
+            append("请仅连接你拥有或已获得明确授权访问的主机；因使用本应用造成的任何数据丢失、服务中断或法律纠纷，")
+            append("均由使用者自行承担，作者不承担任何责任。软件按“现状”提供，不附带任何明示或暗示的担保。")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("关于 ${getString(R.string.app_name_short)}")
+            .setMessage(message)
+            .setNeutralButton("GitHub") { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/duichuai/peerrdp")))
+            }
+            .setPositiveButton("关闭", null)
+            .show()
     }
 
     /** 已有 Tailscale 配置则回填编辑，没有则新建 */
