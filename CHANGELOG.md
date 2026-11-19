@@ -6,6 +6,17 @@
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 发布产物由 GitHub Actions 在推送 `v*` tag 时自动构建并附加 APK。
 
+## [2.2.0] - 2026-11-19
+
+### 新增
+- 移动端文本输入不再依赖服务器输入法：客户端输入法在本地组词，提交后的文本以 RDP Unicode 按键事件发送到远端
+  - 退格/向后删除发送 `VK_BACK` / 扩展 `VK_DELETE`，输入法回车发送 `VK_RETURN`
+  - 组词与候选框保留在客户端，仅上屏文本进入远端
+- 连接编辑新增更大分辨率：2560×1600、2880×1800、3440×1440、3840×2160
+
+### 构建
+- `scripts/build-freerdpcore-aar.sh` 新增补丁 11/11（`SessionView` / `SessionInputManager` 客户端文本输入），并重编 freeRDPCore AAR
+
 ## [2.1.2] - 2026-11-19
 
 ### 安全
