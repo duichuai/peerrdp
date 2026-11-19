@@ -49,8 +49,6 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, ConnectionEditActivity::class.java))
         }
 
-        binding.fabTailscale.setOnClickListener { openTailscaleConfig() }
-
         lifecycleScope.launch {
             db.connectionDao().observeAll().collect { list ->
                 adapter.submitList(list)
