@@ -606,6 +606,160 @@ else:
     print('    patched: SessionInputManager.java')
 PY
 
+# ---------------------------------------------------------------- 补丁 12/12：悬浮工具栏粘贴文本按钮
+log "补丁 12/12：悬浮工具栏粘贴文本按钮（本地输入框 + 剪贴板粘贴到远端）"
+python3 - "$STUDIO" <<'PY'
+import sys, os, pathlib
+studio = pathlib.Path(sys.argv[1])
+
+# 1) strings.xml 新增 menu_paste
+sp = studio / 'freeRDPCore/src/main/res/values/strings.xml'
+s = sp.read_text(encoding='utf-8')
+if 'menu_paste' not in s:
+    anchor = '<string name="menu_touch_pointer">Touch Pointer</string>'
+    assert anchor in s
+    s = s.replace(anchor, anchor + '\n    <string name="menu_paste">Paste Text</string>', 1)
+    sp.write_text(s, encoding='utf-8')
+    print('    patched: strings.xml')
+
+# 2) floating_toolbar.xml 新增粘贴按钮
+ftp = studio / 'freeRDPCore/src/main/res/layout/floating_toolbar.xml'
+ft = ftp.read_text(encoding='utf-8')
+if 'floating_toolbar_paste' not in ft:
+    anchor = '''        <ImageButton
+            android:id="@+id/floating_toolbar_sys_keyboard"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:contentDescription="@string/menu_sys_keyboard"
+            app:tint="#FFFFFF"
+            android:src="@drawable/ic_keyboard" />'''
+    assert anchor in ft
+    btn = anchor + '''
+
+        <ImageButton
+            android:id="@+id/floating_toolbar_paste"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:contentDescription="@string/menu_paste"
+            app:tint="#FFFFFF"
+            android:src="@drawable/ic_content_paste" />'''
+    ft = ft.replace(anchor, btn, 1)
+    ftp.write_text(ft, encoding='utf-8')
+    print('    patched: floating_toolbar.xml')
+
+# 3) ic_content_paste.xml 矢量图标（新建）
+ic = studio / 'freeRDPCore/src/main/res/drawable/ic_content_paste.xml'
+if not ic.exists():
+    ic.write_text('''<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M19,20H5V4H7V7H17V4H19M19,2H14.82C14.4,0.84 13.3,0 12,0C10.7,0 9.6,0.84 9.18,2H5A2,2 0 0,0 3,4V20A2,2 0 0,0 5,22H19A2,2 0 0,0 21,20V4A2,2 0 0,0 19,2M12,4A1,1 0 0,1 13,5A1,1 0 0,1 12,6A1,1 0 0,1 11,5A1,1 0 0,1 12,4Z"/>
+</vector>
+''', encoding='utf-8')
+    print('    created: ic_content_paste.xml')
+
+# 4) FloatingToolbar.java 新增 onPasteText 回调与按钮绑定
+ftj = studio / 'freeRDPCore/src/main/java/com/freerdp/freerdpcore/presentation/FloatingToolbar.java'
+ftc = ftj.read_text(encoding='utf-8')
+if 'onPasteText' not in ftc:
+    old_iface = '\t\tvoid onToggleKeyboard();\n\t}'
+    new_iface = '\t\tvoid onToggleKeyboard();\n\t\tvoid onPasteText();\n\t}'
+    assert old_iface in ftc
+    ftc = ftc.replace(old_iface, new_iface, 1)
+    old_bind = 'bindButton(activity, R.id.floating_toolbar_sys_keyboard, listener::onToggleKeyboard);'
+    new_bind = old_bind + '\n\t\tbindButton(activity, R.id.floating_toolbar_paste, listener::onPasteText);'
+    assert old_bind in ftc
+    ftc = ftc.replace(old_bind, new_bind, 1)
+    ftj.write_text(ftc, encoding='utf-8')
+    print('    patched: FloatingToolbar.java')
+
+# 5) SessionActivity.java 新增粘贴对话框与粘贴逻辑
+sap = studio / 'freeRDPCore/src/main/java/com/freerdp/freerdpcore/presentation/SessionActivity.java'
+sa = sap.read_text(encoding='utf-8')
+if 'showPasteTextDialog' not in sa:
+    # imports
+    old_imp = 'import android.widget.Toast;'
+    new_imp = ('import android.text.InputType;\n'
+               'import android.widget.EditText;\n'
+               'import android.widget.Toast;\n\n'
+               'import androidx.appcompat.app.AlertDialog;')
+    assert old_imp in sa
+    sa = sa.replace(old_imp, new_imp, 1)
+    # FloatingToolbar.Listener 新增 onPasteText
+    old_kb = ('\t\t\t@Override public void onToggleKeyboard()\n'
+              '\t\t\t{\n'
+              '\t\t\t\tif (inputManager != null)\n'
+              '\t\t\t\t\tinputManager.toggleKeyboard();\n'
+              '\t\t\t}\n'
+              '\t\t});')
+    new_kb = ('\t\t\t@Override public void onToggleKeyboard()\n'
+              '\t\t\t{\n'
+              '\t\t\t\tif (inputManager != null)\n'
+              '\t\t\t\t\tinputManager.toggleKeyboard();\n'
+              '\t\t\t}\n'
+              '\t\t\t@Override public void onPasteText()\n'
+              '\t\t\t{\n'
+              '\t\t\t\tshowPasteTextDialog();\n'
+              '\t\t\t}\n'
+              '\t\t});')
+    assert old_kb in sa
+    sa = sa.replace(old_kb, new_kb, 1)
+    # 新增 showPasteTextDialog / pasteTextToRemote 方法（插入到 onCreate 之后）
+    old_hide = '\t\thideSystemBars();\n\t}\n\n\t@Override public void onWindowFocusChanged'
+    new_methods = (
+        '\t\thideSystemBars();\n'
+        '\t}\n'
+        '\n'
+        '\t// 弹出本地输入框：用户输入/粘贴文本，点击"粘贴"后发送到远端。\n'
+        '\tprivate void showPasteTextDialog()\n'
+        '\t{\n'
+        '\t\tfinal EditText editText = new EditText(this);\n'
+        '\t\teditText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);\n'
+        '\t\teditText.setMinLines(3);\n'
+        '\t\teditText.setHint(R.string.menu_paste);\n'
+        '\n'
+        '\t\tnew AlertDialog.Builder(this)\n'
+        '\t\t    .setTitle(R.string.menu_paste)\n'
+        '\t\t    .setView(editText)\n'
+        '\t\t    .setPositiveButton(R.string.menu_paste, (dialog, which) -> {\n'
+        '\t\t\t    String text = editText.getText().toString();\n'
+        '\t\t\t    if (text.isEmpty())\n'
+        '\t\t\t\t    return;\n'
+        '\t\t\t    pasteTextToRemote(text);\n'
+        '\t\t    })\n'
+        '\t\t    .setNegativeButton(android.R.string.cancel, null)\n'
+        '\t\t    .show();\n'
+        '\t}\n'
+        '\n'
+        '\t// 将文本写入远端剪贴板并发送 Ctrl+V，由远端应用执行粘贴。\n'
+        '\tprivate void pasteTextToRemote(String text)\n'
+        '\t{\n'
+        '\t\tif (session == null || session.getInstance() == 0)\n'
+        '\t\t\treturn;\n'
+        '\t\tlong instance = session.getInstance();\n'
+        '\t\tLibFreeRDP.sendClipboardData(instance, text);\n'
+        '\t\tnew android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {\n'
+        '\t\t\tinputManager.processVirtualKey(0xA2, true);   // VK_LCONTROL\n'
+        '\t\t\tinputManager.processVirtualKey(0x56, true);   // \'V\'\n'
+        '\t\t\tinputManager.processVirtualKey(0x56, false);\n'
+        '\t\t\tinputManager.processVirtualKey(0xA2, false);\n'
+        '\t\t}, 50);\n'
+        '\t}\n'
+        '\n'
+        '\t@Override public void onWindowFocusChanged')
+    assert old_hide in sa
+    sa = sa.replace(old_hide, new_methods, 1)
+    sap.write_text(sa, encoding='utf-8')
+    print('    patched: SessionActivity.java')
+PY
+
 if [[ "${SKIP_BUILD:-0}" == "1" ]]; then
   log "SKIP_BUILD=1：已停在打补丁阶段，未编译"
   exit 0
