@@ -8,11 +8,11 @@ PeerRDP（下称“本项目”）的分发物包含下列第三方软件。本�
 
 | 组件 | 版本 | 许可证 | 分发形式 |
 | --- | --- | --- | --- |
-| FreeRDP 核心库（`libfreerdp3`、`libfreerdp-client3`、`libwinpr3`）与 C JNI（`libfreerdp-android`） | 3.33.0 | Apache-2.0 | 原生库 |
-| FreeRDP Android 客户端（`com.freerdp.freerdpcore`） | 3.33.0 | MPL-2.0（50 个 Java/Kotlin 文件）；`ScrollView2D.java`、`GestureDetector.java` 为 Apache-2.0 | `classes.jar`（`app/libs/freeRDPCore-release.aar`） |
+| FreeRDP 核心库（`libfreerdp3`、`libfreerdp-client3`、`libwinpr3`）与 C JNI（`libfreerdp-android`） | 3.33.1 | Apache-2.0 | 原生库 |
+| FreeRDP Android 客户端（`com.freerdp.freerdpcore`） | 3.33.1 | MPL-2.0（50 个 Java/Kotlin 文件）；`ScrollView2D.java`、`GestureDetector.java` 为 Apache-2.0 | `classes.jar`（`app/libs/freeRDPCore-release.aar`） |
 | OpenSSL（`libssl`、`libcrypto`、legacy provider `legacy.so`） | 4.0.3 | Apache-2.0 | 原生库 |
 | cJSON | 1.7.19 | MIT | `libcjson.so` |
-| uriparser | 1.0.2 | BSD-3-Clause | `liburiparser.so` |
+| uriparser | 1.0.3 | BSD-3-Clause | `liburiparser.so` |
 | SQLCipher for Android | 4.17.0 | BSD-3-Clause（Zetetic LLC） | `libsqlcipher.so` |
 | SQLite | 3.53.3 | 公有领域 | 静态链接进 `libsqlcipher.so` |
 | LibTomCrypt | 1.18.2 | 公有领域 | 静态链接进 `libsqlcipher.so` |
@@ -32,7 +32,7 @@ PeerRDP（下称“本项目”）的分发物包含下列第三方软件。本�
 
 ## 2. 关于 FreeRDP 引擎的修改
 
-分发所用的 `app/libs/freeRDPCore-release.aar` 由 FreeRDP 3.33.0 源码构建。构建期共应用 9 处补丁，均为构建配置与依赖镜像版本调整，**未修改任何 `.java` / `.kt` 源文件**。补丁清单见 [SOURCE.md](SOURCE.md)，可执行实现见 [`scripts/build-freerdpcore-aar.sh`](scripts/build-freerdpcore-aar.sh)。
+分发所用的 `app/libs/freeRDPCore-release.aar` 由 FreeRDP 3.33.1 源码构建。构建期共应用 9 处补丁，均为构建配置与依赖镜像版本调整，**未修改任何 `.java` / `.kt` 源文件**。补丁清单见 [SOURCE.md](SOURCE.md)，可执行实现见 [`scripts/build-freerdpcore-aar.sh`](scripts/build-freerdpcore-aar.sh)。
 
 受 MPL-2.0 覆盖的源码获取方式见 [SOURCE.md](SOURCE.md)。
 

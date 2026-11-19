@@ -1,6 +1,6 @@
 # PeerRDP
 
-PeerRDP 是一个面向 Android 的远程桌面（RDP）客户端。引擎基于 [FreeRDP](https://github.com/FreeRDP/FreeRDP) 3.33.0，以预编译 AAR 形式集成；应用层使用 Kotlin + Room。可选集成 Tailscale（tsnet）或 [EasyTier](https://github.com/EasyTier/EasyTier) 组网：通过应用内本地 SOCKS5 代理连接目标主机。
+PeerRDP 是一个面向 Android 的远程桌面（RDP）客户端。引擎基于 [FreeRDP](https://github.com/FreeRDP/FreeRDP) 3.33.1，以预编译 AAR 形式集成；应用层使用 Kotlin + Room。可选集成 Tailscale（tsnet）或 [EasyTier](https://github.com/EasyTier/EasyTier) 组网：通过应用内本地 SOCKS5 代理连接目标主机。
 
 > 本项目为独立开发，与 FreeRDP、Tailscale 项目无隶属或背书关系。
 
@@ -70,7 +70,7 @@ tsnet AAR 由仓库内 `tsnet-android/`（Go module，wrapper 源码已入库）
 scripts/build-tsnet-aar.sh   # 产出并回填 app/libs/tsnet.aar + tsnet-sources.jar
 ```
 
-Go 模块下载通常需要代理（本机实测走 `socks5://192.168.56.1:1080`）。引擎重建需要 NDK 29.0.13113456、CMake 4.1.2、JDK 21；默认 FreeRDP 3.33.0 + OpenSSL 4.0.3，可用 `FREERDP_VERSION` / `OPENSSL_VERSION` 覆盖。
+Go 模块下载通常需要代理（本机实测走 `socks5://192.168.56.1:1080`）。引擎重建需要 NDK 29.0.13113456、CMake 4.1.2、JDK 21；默认 FreeRDP 3.33.1 + OpenSSL 4.0.3，可用 `FREERDP_VERSION` / `OPENSSL_VERSION` 覆盖。
 
 EasyTier 原生库（`app/src/main/jniLibs/arm64-v8a/*.so`）已随仓库提供，日常构建无需重编。仅在升级 EasyTier 时需要重建（Rust stable + `aarch64-linux-android`、cargo-ndk、NDK r28+、protoc）：
 

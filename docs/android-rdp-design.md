@@ -39,11 +39,11 @@ v2 设计稿规划架构、模块划分、接口约定、输入映射策略、�
 
 | 决策 | 内容 | 理由 |
 | --- | --- | --- |
-| 协议实现 | **FreeRDP 3.33.0**（Apache-2.0） | 成熟、活跃、Android 官方客户端即基于它 |
+| 协议实现 | **FreeRDP 3.33.1**（Apache-2.0） | 成熟、活跃、Android 官方客户端即基于它 |
 | 复用粒度 | 直接复用上游模块 `client/Android/Studio/freeRDPCore` | 内含 CMake 原生构建 + 成熟 JNI 绑定 + 会话 Activity/输入管理，避免自研 RDP 栈 |
 | 不引入 | 不自行实现 RDP 协议、不自行写 JNI | 自研成本极高且无收益 |
 
-`freeRDPCore` 提供的核心能力（源码位置 `deps/freerdp-3.33.0/client/Android/Studio/freeRDPCore/`）：
+`freeRDPCore` 提供的核心能力（源码位置 `deps/freerdp-3.33.1/client/Android/Studio/freeRDPCore/`）：
 
 - **JNI 门面** `com.freerdp.freerdpcore.services.LibFreeRDP`
 - **会话 Activity** `presentation.SessionActivity`（渲染、触摸、键盘、证书弹窗全内置）
@@ -231,10 +231,10 @@ peerrdp/
 ├── app/libs/freeRDPCore-release.aar         # 由 deps 上游工程预编译产出（方案 A）
 ├── app/libs/tsnet.aar                       # tsnet（Tailscale 用户态节点，gomobile 产出）
 ├── deps/
-│   ├── freerdp-3.33.0/                       # 上游源码（含 Studio 工程）
+│   ├── freerdp-3.33.1/                       # 上游源码（含 Studio 工程）
 │   │   ├── client/Android/Studio/            # ① 用来编 AAR
 │   │   └── client/Android/cmake/*.cmake      # 已 patch 指向本地 mirror
-│   └── mirror/{openssl-4.0.3,cJSON-1.7.19,uriparser-1.0.2}.tar.gz
+│   └── mirror/{openssl-4.0.3,cJSON-1.7.19,uriparser-1.0.3}.tar.gz
 ├── docs/android-rdp-design.md                # 本文档
 ├── gradle/wrapper/                           # Gradle 9.6.1（官方源 + sha256 校验）
 ├── settings.gradle / build.gradle / gradle.properties
@@ -275,7 +275,7 @@ peerrdp/
 
 - `ExternalOpenSSL.cmake` → `deps/mirror/openssl-4.0.3.tar.gz`（TLS/NLA 必需）
 - `ExternalCJSON.cmake` → `deps/mirror/cJSON-1.7.19.tar.gz`
-- `ExternalUriparser.cmake` → `deps/mirror/uriparser-1.0.2.tar.gz`
+- `ExternalUriparser.cmake` → `deps/mirror/uriparser-1.0.3.tar.gz`
 
 三个 `.cmake` 已 patch 为"本地 mirror 优先"。CMake 参数（精简，关掉多媒体依赖）：
 
@@ -298,7 +298,7 @@ kotlin.daemon.jvmargs=-Xmx1024m
 
 ```bash
 # ① 预编译 freeRDPCore AAR（用上游自有 Studio 工程，原生库同时被编出）
-cd deps/freerdp-3.33.0/client/Android/Studio
+cd deps/freerdp-3.33.1/client/Android/Studio
 ANDROID_HOME=/path/to/android-sdk ./gradlew :freeRDPCore:assembleRelease
 # 产物 → freeRDPCore/build/outputs/aar/freeRDPCore-release.aar → 复制到 app/libs/
 
@@ -359,7 +359,7 @@ ANDROID_HOME=/path/to/android-sdk ./gradlew assembleDebug
 | `edit/ConnectionEditActivity.kt` | 表单 + 校验 | 直接用 |
 | `RdpConnector.kt` | Entity → `freerdp://` URI | 直接用（改造为 AAR 依赖后 import 不变） |
 | `res/`（layouts/values/mipmap） | 界面资源 | 直接用 |
-| `deps/freerdp-3.33.0` + `deps/mirror` + 三处 cmake patch | 引擎源码与原生依赖 | 直接用 |
+| `deps/freerdp-3.33.1` + `deps/mirror` + 三处 cmake patch | 引擎源码与原生依赖 | 直接用 |
 | `gradle.properties` 中"勿回退"结论 | 仓库/版本约束 | 直接沿用 |
 
 因 v1 应用层代码与引擎的唯一耦合点是"`freerdp://` URI + `SessionActivity` 类引用"，改为 AAR 依赖后 **应用层 Kotlin 代码零改动**。

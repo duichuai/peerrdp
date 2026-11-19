@@ -7,7 +7,7 @@
 
 ## 1. 项目概况
 
-- 目标：Android RDP 客户端（PeerRDP），FreeRDP 3.33.0 引擎 + Kotlin/Room 应用层
+- 目标：Android RDP 客户端（PeerRDP），FreeRDP 3.33.1 引擎 + Kotlin/Room 应用层
 - 组网：可选 Tailscale（tsnet）用户态节点，RDP 经本地 SOCKS5 走 tailnet
 - 仓库：`peerrdp/`（git 根），引擎与 tsnet 均以**预编译 AAR** 消费，工程仅 `:app` 一个模块
 - 设计文档：`peerrdp/docs/android-rdp-design.md`、`peerrdp/docs/technical-design.md`、`peerrdp/docs/tailscale-integration-design.md`
@@ -46,7 +46,7 @@
 
 - 引擎 AAR 为混合许可：FreeRDP 核心与 C JNI 是 Apache-2.0，**freeRDPCore 的 Java/Kotlin（50 个文件）是 MPL-2.0**；OpenSSL 4.0.x、cJSON（MIT）、uriparser/SQLCipher（BSD-3）均宽松。EasyTier 原生库为 LGPL-3.0（见 2.4）。公开发布需补 LICENSE / THIRD_PARTY_NOTICES，并按 MPL §3.2 提供 AAR 源码获取方式（上游 tag + `scripts/build-freerdpcore-aar.sh` 的补丁清单）。
 - 应用 manifest 用 `tools:node="remove"` 移除引擎合并进来的未使用权限：CAMERA、RECORD_AUDIO、READ/WRITE_EXTERNAL_STORAGE、POST_NOTIFICATIONS；保留 INTERNET、ACCESS_NETWORK_STATE、MODIFY_AUDIO_SETTINGS、ACCESS_WIFI_STATE。`build-app.sh` 构建后会校验权限清单。
-- 引擎/依赖版本已参数化：`build-freerdpcore-aar.sh` 默认 `FREERDP_VERSION=3.33.0`、`OPENSSL_VERSION=4.0.3`（可用同名环境变量覆盖）；缺源码时自动下载，并把版本与镜像实际 sha256 写入 `cmake/DepVersions.cmake`。**2026-11-08 已重编：仓库内 AAR 为 FreeRDP 3.33.0 + OpenSSL 4.0.3 的产物。**
+- 引擎/依赖版本已参数化：`build-freerdpcore-aar.sh` 默认 `FREERDP_VERSION=3.33.1`、`OPENSSL_VERSION=4.0.3`（可用同名环境变量覆盖）；缺源码时自动下载，并把版本与镜像实际 sha256 写入 `cmake/DepVersions.cmake`。**2026-11-19 已重编：仓库内 AAR 为 FreeRDP 3.33.1 + OpenSSL 4.0.3 的产物。**
 
 ### 2.3 Tailscale（tsnet）集成（2026-11-08）
 
@@ -128,7 +128,7 @@ scripts/build-easytier-so.sh
 - JDK：应用构建需 17+；重编 AAR 需 21
 - 引擎工具链：NDK 29.0.13113456 + CMake 4.1.2，**须装在本地磁盘**（共享挂载盘不支持符号链接，SDK 放上去会构建失败）
 - tsnet 工具链：Go 1.27.1 + gomobile；`scripts/build-tsnet-aar.sh` 默认 `GOROOT=$HOME/go1.27`、`ANDROID_HOME=/opt/android-sdk`、`GOPROXY=https://goproxy.cn,direct`，可按本机覆盖；`gomobile bind` 固定 `androidapi 21`
-- 2026-11-08 已重编引擎：FreeRDP **3.33.0** + OpenSSL **4.0.3**（若 openssl.org 不可达，脚本会回退到 GitHub codeload；网络受限时可自行配置代理）
+- 2026-11-19 已重编引擎：FreeRDP **3.33.1** + OpenSSL **4.0.3**（若 openssl.org 不可达，脚本会回退到 GitHub codeload；网络受限时可自行配置代理）
 - 构建机内存建议 8GB 以上（NDK 编译 + R8 压缩），内存紧张时仅出 arm64-v8a 并限制并发
 - 行尾统一由 `.gitattributes` 约定（`gradlew`/`*.sh` 为 LF，`*.bat` 为 CRLF）；若在共享挂载盘上出现整树差异，先用 `git diff --ignore-cr-at-eol` 确认是否为挂载噪声
 - 外部下载源：`dl.google.com` 与 Maven 官方源需可访问；GitHub 不通时可走代理或使用 `deps/mirror/` 下的本地包

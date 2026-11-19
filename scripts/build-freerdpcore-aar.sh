@@ -52,10 +52,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKDIR="${WORKDIR:-/tmp/peerrdp-build}"
 
 # 引擎与原生依赖版本：升级时改默认值或在命令行用同名环境变量覆盖
-FREERDP_VERSION="${FREERDP_VERSION:-3.33.0}"
+FREERDP_VERSION="${FREERDP_VERSION:-3.33.1}"
 OPENSSL_VERSION="${OPENSSL_VERSION:-4.0.3}"
 CJSON_VERSION="${CJSON_VERSION:-1.7.19}"
-URIPARSER_VERSION="${URIPARSER_VERSION:-1.0.2}"
+URIPARSER_VERSION="${URIPARSER_VERSION:-1.0.3}"
 
 SRC_DEPS="$REPO_ROOT/deps"
 MIRROR="$SRC_DEPS/mirror"
@@ -319,7 +319,7 @@ for name, url in targets.items():
     p = os.path.join(cmake_dir, name)
     with open(p, encoding='utf-8') as f:
         s = f.read()
-    # 先按 token 去掉既有的 URL 与地址（3.33.0 的 cJSON 把 URL 和 URL_HASH 写在同一行，
+    # 先按 token 去掉既有的 URL 与地址（3.33.x 的 cJSON 把 URL 和 URL_HASH 写在同一行，
     # 不能整行删除），再在 URL_HASH 前插入唯一的本地镜像地址
     s2 = re.sub(r'\bURL[ \t]+\S+', '', s)
     s2 = re.sub(r'[ \t]*URL_HASH',

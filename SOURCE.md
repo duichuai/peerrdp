@@ -5,9 +5,9 @@
 ## 1. 上游源码
 
 - 项目：FreeRDP
-- 版本：3.33.0（仓库内现有 AAR 的构建基线）
+- 版本：3.33.1（仓库内现有 AAR 的构建基线）
 - 仓库：https://github.com/FreeRDP/FreeRDP
-- 源码包：https://github.com/FreeRDP/FreeRDP/archive/refs/tags/3.33.0.tar.gz
+- 源码包：https://github.com/FreeRDP/FreeRDP/archive/refs/tags/3.33.1.tar.gz
 
 ## 2. 构建期修改
 
@@ -23,7 +23,7 @@ AAR 由上述源码构建，构建期共应用 9 处补丁，全部为构建配�
 8. `client/Android/cmake/External*.cmake` → 依赖镜像改为本地路径
 9. `cmake/DepVersions.cmake` → 按实际镜像文件写入依赖版本与 sha256
 
-完整且可执行的补丁实现见仓库脚本 [`scripts/build-freerdpcore-aar.sh`](scripts/build-freerdpcore-aar.sh)。该脚本会自动下载对应版本的上游源码、应用上述补丁并编译，因此执行它即可获得与本 AAR 相同的 Source Code Form（脚本默认版本即 FreeRDP 3.33.0）。
+完整且可执行的补丁实现见仓库脚本 [`scripts/build-freerdpcore-aar.sh`](scripts/build-freerdpcore-aar.sh)。该脚本会自动下载对应版本的上游源码、应用上述补丁并编译，因此执行它即可获得与本 AAR 相同的 Source Code Form（脚本默认版本即 FreeRDP 3.33.1）。
 
 ## 3. tsnet AAR 源码
 
@@ -45,10 +45,10 @@ AAR 由上述源码构建，构建期共应用 9 处补丁，全部为构建配�
 
 | 组件 | 版本 | 源码地址 |
 | --- | --- | --- |
-| FreeRDP | 3.33.0 | https://github.com/FreeRDP/FreeRDP |
+| FreeRDP | 3.33.1 | https://github.com/FreeRDP/FreeRDP |
 | OpenSSL | 4.0.3 | https://github.com/openssl/openssl |
 | cJSON | 1.7.19 | https://github.com/DaveGamble/cJSON |
-| uriparser | 1.0.2 | https://github.com/uriparser/uriparser |
+| uriparser | 1.0.3 | https://github.com/uriparser/uriparser |
 | SQLCipher | 4.17.0 | https://github.com/sqlcipher/sqlcipher |
 | EasyTier | 2.7.1 | https://github.com/EasyTier/EasyTier |
 
