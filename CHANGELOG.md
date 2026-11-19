@@ -6,6 +6,16 @@
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 发布产物由 GitHub Actions 在推送 `v*` tag 时自动构建并附加 APK。
 
+## [2.3.4] - 2026-11-19
+
+### 修复
+- 修复受控机无法输入：ASCII 可打印字符恢复走扫描码（所有服务器均支持），不再全部强制剪贴板粘贴；仅非 ASCII 文本（中文等）在服务器不支持 Unicode 键盘事件时走剪贴板粘贴
+- 修复 VirtualBox VRDP 等服务器上连续输入中文次序错乱：RDP 剪贴板为懒投递，服务器在远端应用粘贴时才回拉数据，连续写入会互相覆盖；改为 native 层投递确认同步——`pasteTextViaClipboard` 写剪贴板 + Ctrl+V 后阻塞等待 `server_format_data_request` 确认服务器已收到数据，确认后才返回，杜绝后一次覆盖前一次
+
+### 构建
+- 修复 `build-freerdpcore-aar.sh` 增量构建失败：rsync 未排除 `freeRDPCore/src/main/cpp/external`，openssl 源码被 `--delete` 清掉而 `.cxx` stamp 仍在，cmake 跳过解压直接 configure 失败；已加排除项
+- 重编 freeRDPCore AAR（native 新增 `pasteDeliveredEvent` 同步机制，补丁 11/11 更新 `SessionInputManager` commitText 逻辑）
+
 ## [2.3.3] - 2026-11-19
 
 ### 修复
