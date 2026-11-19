@@ -8,7 +8,7 @@
 # 流程：
 #   1) 把仓库同步到 /tmp 工作区（共享挂载盘（CIFS/vboxsf）不支持符号链接，不能就地构建）
 #   2) 缺少上游源码或依赖镜像时，按版本自动下载
-#   3) 在上游 Studio 工程上打齐 10 处必要补丁（见下方 PATCH 说明）
+#   3) 在上游 Studio 工程上打齐 11 处必要补丁（见下方 PATCH 说明）
 #   4) ./gradlew :freeRDPCore:assembleRelease
 #   5) AAR 回填到 <repo>/app/libs/ 并校验内容
 #
@@ -45,6 +45,10 @@
 #      com.freerdp.freerdpcore.clipboard，任何两个内嵌 freeRDPCore 的应用共存即报
 #      INSTALL_FAILED_CONFLICTING_PROVIDER(-13)；调用方 ClipboardManagerProxy 引用
 #      AUTHORITY/CONTENT_URI 常量，自动跟随，无需修改）
+#  11. SessionView / SessionInputManager → 客户端输入法文本输入（上游 inputType=TYPE_NULL
+#      且 commitText 被丢弃，只能靠服务器输入法）。改为 TYPE_CLASS_TEXT，自定义
+#      InputConnection 把提交的文本逐 UTF-16 单元转成 RDP Unicode 按键事件，退格/删除转为
+#      VK_BACK/VK_DELETE，IME 回车的 key event 走原有物理键盘通道
 # =============================================================================
 set -euo pipefail
 
@@ -398,6 +402,194 @@ for p in sys.argv[1:3]:
     with open(p, 'w', encoding='utf-8') as f:
         f.write(s.replace(OLD, NEW))
     print('    patched:', p.rsplit('/', 3)[-3] + '/' + p.rsplit('/', 2)[-2] + '/' + p.rsplit('/', 1)[-1])
+PY
+
+# ---------------------------------------------------------------- PATCH 11/11
+log "补丁 11/11：客户端输入法文本输入（InputConnection → RDP Unicode 事件）"
+python3 - "$STUDIO/freeRDPCore/src/main/java/com/freerdp/freerdpcore/presentation/SessionView.java" \
+          "$STUDIO/freeRDPCore/src/main/java/com/freerdp/freerdpcore/presentation/SessionInputManager.java" <<'PY'
+import sys
+
+view_path, input_path = sys.argv[1], sys.argv[2]
+
+with open(view_path, encoding='utf-8') as f:
+    view = f.read()
+
+if 'SessionInputConnection' in view:
+    print('    SessionView 已打过补丁')
+else:
+    # 1) 需要 KeyEvent
+    old = 'import android.view.InputDevice;\n'
+    assert old in view, 'SessionView: InputDevice import 缺失（上游结构变化？）'
+    view = view.replace(old, old + 'import android.view.KeyEvent;\n', 1)
+
+    # 2) 监听接口新增文本输入回调
+    old = '\t\tvoid onSessionViewHScroll(boolean right);\n\t}\n'
+    assert old in view, 'SessionViewListener 尾部缺失（上游结构变化？）'
+    view = view.replace(old,
+        '\t\tvoid onSessionViewHScroll(boolean right);\n'
+        '\n'
+        '\t\t// 客户端输入法提交的文本。由监听方转成 RDP Unicode 按键事件，\n'
+        '\t\t// 因此远端不再需要自己的输入法。\n'
+        '\t\tboolean onSessionViewCommitText(CharSequence text);\n'
+        '\n'
+        '\t\tvoid onSessionViewDeleteText(int beforeLength, int afterLength);\n'
+        '\n'
+        '\t\tboolean onSessionViewImeKeyEvent(KeyEvent event);\n'
+        '\t}\n', 1)
+
+    # 3) TYPE_NULL → TYPE_CLASS_TEXT，并换上真正转发文本的 InputConnection
+    old = (
+        '\t@Override public InputConnection onCreateInputConnection(EditorInfo outAttrs)\n'
+        '\t{\n'
+        '\t\toutAttrs.actionLabel = null;\n'
+        '\t\toutAttrs.inputType = InputType.TYPE_NULL;\n'
+        '\t\toutAttrs.imeOptions = EditorInfo.IME_ACTION_NONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI |\n'
+        '\t\t                      EditorInfo.IME_FLAG_NO_FULLSCREEN;\n'
+        '\t\treturn new BaseInputConnection(this, false);\n'
+        '\t}\n')
+    assert old in view, 'onCreateInputConnection 结构变化？'
+    new = (
+        '\t@Override public InputConnection onCreateInputConnection(EditorInfo outAttrs)\n'
+        '\t{\n'
+        '\t\toutAttrs.actionLabel = null;\n'
+        '\t\t// 普通文本输入框：输入法在本地组词，提交后的文本以 Unicode 按键事件发往远端。\n'
+        '\t\t// 上游的 TYPE_NULL + BaseInputConnection 会丢弃 commitText，用户只能依赖服务器输入法。\n'
+        '\t\toutAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE;\n'
+        '\t\toutAttrs.imeOptions = EditorInfo.IME_ACTION_NONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI |\n'
+        '\t\t                      EditorInfo.IME_FLAG_NO_FULLSCREEN;\n'
+        '\t\t// 视图本身没有文本，光标固定在 0；避免输入法把远端内容当作可替换文本。\n'
+        '\t\toutAttrs.initialSelStart = 0;\n'
+        '\t\toutAttrs.initialSelEnd = 0;\n'
+        '\t\toutAttrs.initialCapsMode = 0;\n'
+        '\t\treturn new SessionInputConnection(this);\n'
+        '\t}\n'
+        '\n'
+        '\t// 只转发、不保存文本的 InputConnection：视图没有自己的文本缓冲区，文本属于远端。\n'
+        '\tprivate class SessionInputConnection extends BaseInputConnection\n'
+        '\t{\n'
+        '\t\tSessionInputConnection(View targetView)\n'
+        '\t\t{\n'
+        '\t\t\tsuper(targetView, false);\n'
+        '\t\t}\n'
+        '\n'
+        '\t\t@Override public boolean commitText(CharSequence text, int newCursorPosition)\n'
+        '\t\t{\n'
+        '\t\t\tif (text == null || text.length() == 0)\n'
+        '\t\t\t\treturn true;\n'
+        '\t\t\treturn sessionViewListener != null && sessionViewListener.onSessionViewCommitText(text);\n'
+        '\t\t}\n'
+        '\n'
+        '\t\t// 组词过程留在输入法内部（候选框由输入法绘制），只发送最终提交的文本。\n'
+        '\t\t@Override public boolean setComposingText(CharSequence text, int newCursorPosition)\n'
+        '\t\t{\n'
+        '\t\t\treturn true;\n'
+        '\t\t}\n'
+        '\n'
+        '\t\t@Override public boolean finishComposingText()\n'
+        '\t\t{\n'
+        '\t\t\treturn true;\n'
+        '\t\t}\n'
+        '\n'
+        '\t\t@Override public boolean deleteSurroundingText(int beforeLength, int afterLength)\n'
+        '\t\t{\n'
+        '\t\t\tif (beforeLength <= 0 && afterLength <= 0)\n'
+        '\t\t\t\treturn true;\n'
+        '\t\t\tif (sessionViewListener == null)\n'
+        '\t\t\t\treturn false;\n'
+        '\t\t\tsessionViewListener.onSessionViewDeleteText(beforeLength, afterLength);\n'
+        '\t\t\treturn true;\n'
+        '\t\t}\n'
+        '\n'
+        '\t\t@Override public boolean deleteSurroundingTextInCodePoints(int beforeLength,\n'
+        '\t\t                                                          int afterLength)\n'
+        '\t\t{\n'
+        '\t\t\treturn deleteSurroundingText(beforeLength, afterLength);\n'
+        '\t\t}\n'
+        '\n'
+        '\t\t@Override public boolean sendKeyEvent(KeyEvent event)\n'
+        '\t\t{\n'
+        '\t\t\treturn sessionViewListener != null && sessionViewListener.onSessionViewImeKeyEvent(event);\n'
+        '\t\t}\n'
+        '\t}\n')
+    view = view.replace(old, new, 1)
+
+    with open(view_path, 'w', encoding='utf-8') as f:
+        f.write(view)
+    print('    patched: SessionView.java')
+
+with open(input_path, encoding='utf-8') as f:
+    inp = f.read()
+
+if 'onSessionViewCommitText' in inp:
+    print('    SessionInputManager 已打过补丁')
+else:
+    old = '\tprivate static final int MOVE_EVENT_THROTTLE_MS = 16;\n'
+    assert old in inp, 'SessionInputManager 常量区缺失（上游结构变化？）'
+    inp = inp.replace(old,
+        old
+        + '\n'
+        + '\t// 软键盘路径使用的虚拟键码；与 KeyboardMapper 中同名的包内常量保持一致。\n'
+        + '\t// VK_DELETE 是扩展键，需带 0x0100 标志位。\n'
+        + '\tprivate static final int VK_RETURN = 0x0D;\n'
+        + '\tprivate static final int VK_BACK = 0x08;\n'
+        + '\tprivate static final int VK_DELETE = 0x2E | 0x0100;\n', 1)
+
+    old = (
+        '\t@Override public boolean isUnicodeInputSupported()\n'
+        '\t{\n'
+        '\t\treturn instance != 0 && LibFreeRDP.isUnicodeInputSupported(instance);\n'
+        '\t}\n')
+    assert old in inp, 'isUnicodeInputSupported 结构变化？'
+    new = old + (
+        '\n'
+        '\t// ****************************************************************************\n'
+        '\t// 客户端输入法文本输入\n'
+        '\n'
+        '\t@Override public boolean onSessionViewCommitText(CharSequence text)\n'
+        '\t{\n'
+        '\t\tif (instance == 0)\n'
+        '\t\t\treturn false;\n'
+        '\t\tfor (int i = 0; i < text.length(); i++)\n'
+        '\t\t{\n'
+        '\t\t\tfinal char c = text.charAt(i);\n'
+        '\t\t\t// 输入法把回车当作文本提交；改发真正的按键，远端才会得到一次回车。\n'
+        '\t\t\tif (c == \'\\n\' || c == \'\\r\')\n'
+        '\t\t\t{\n'
+        '\t\t\t\tprocessVirtualKey(VK_RETURN, true);\n'
+        '\t\t\t\tprocessVirtualKey(VK_RETURN, false);\n'
+        '\t\t\t}\n'
+        '\t\t\telse\n'
+        '\t\t\t\tprocessUnicodeKey(c);\n'
+        '\t\t}\n'
+        '\t\treturn true;\n'
+        '\t}\n'
+        '\n'
+        '\t@Override public void onSessionViewDeleteText(int beforeLength, int afterLength)\n'
+        '\t{\n'
+        '\t\tif (instance == 0)\n'
+        '\t\t\treturn;\n'
+        '\t\tfor (int i = 0; i < beforeLength; i++)\n'
+        '\t\t{\n'
+        '\t\t\tprocessVirtualKey(VK_BACK, true);\n'
+        '\t\t\tprocessVirtualKey(VK_BACK, false);\n'
+        '\t\t}\n'
+        '\t\tfor (int i = 0; i < afterLength; i++)\n'
+        '\t\t{\n'
+        '\t\t\tprocessVirtualKey(VK_DELETE, true);\n'
+        '\t\t\tprocessVirtualKey(VK_DELETE, false);\n'
+        '\t\t}\n'
+        '\t}\n'
+        '\n'
+        '\t@Override public boolean onSessionViewImeKeyEvent(KeyEvent event)\n'
+        '\t{\n'
+        '\t\treturn onAndroidKeyEvent(event);\n'
+        '\t}\n')
+    inp = inp.replace(old, new, 1)
+
+    with open(input_path, 'w', encoding='utf-8') as f:
+        f.write(inp)
+    print('    patched: SessionInputManager.java')
 PY
 
 if [[ "${SKIP_BUILD:-0}" == "1" ]]; then
