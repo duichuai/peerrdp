@@ -6,6 +6,16 @@
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 发布产物由 GitHub Actions 在推送 `v*` tag 时自动构建并附加 APK。
 
+## [2.4.0] - 2026-11-20
+
+### 新增
+- 悬浮工具栏新增"粘贴文本"按钮：点击弹出本地输入框，用户可在手机端输入/粘贴任意文本（含中文），点击"粘贴"后通过剪贴板 + Ctrl+V 发送到远端，避开客户端 IME 直接输入 RDP 的兼容性问题
+
+### 构建
+- 新增 `ic_content_paste` 矢量图标、`menu_paste` 字符串资源
+- `FloatingToolbar.Listener` 新增 `onPasteText()` 回调
+- `SessionActivity` 新增 `showPasteTextDialog()` / `pasteTextToRemote()`
+
 ## [2.3.8] - 2026-11-19
 
 ### 变更
