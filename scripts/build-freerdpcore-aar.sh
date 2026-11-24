@@ -744,13 +744,15 @@ if 'showPasteTextDialog' not in sa:
         '\t\tif (session == null || session.getInstance() == 0)\n'
         '\t\t\treturn;\n'
         '\t\tlong instance = session.getInstance();\n'
+        '\t\t// 对话框关闭后的焦点回调会重新上传本地剪贴板；先同步内容，避免旧值覆盖本次文本。\n'
+        '\t\tmClipboardManager.setClipboardData(text);\n'
         '\t\tLibFreeRDP.sendClipboardData(instance, text);\n'
         '\t\tnew android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {\n'
         '\t\t\tinputManager.processVirtualKey(0xA2, true);   // VK_LCONTROL\n'
         '\t\t\tinputManager.processVirtualKey(0x56, true);   // \'V\'\n'
         '\t\t\tinputManager.processVirtualKey(0x56, false);\n'
         '\t\t\tinputManager.processVirtualKey(0xA2, false);\n'
-        '\t\t}, 50);\n'
+        '\t\t}, 200);\n'
         '\t}\n'
         '\n'
         '\t@Override public void onWindowFocusChanged')
@@ -758,6 +760,25 @@ if 'showPasteTextDialog' not in sa:
     sa = sa.replace(old_hide, new_methods, 1)
     sap.write_text(sa, encoding='utf-8')
     print('    patched: SessionActivity.java')
+
+# 已打过 2.4.x 旧补丁的源码树也要升级，不能只处理全新源码。
+method_start = sa.index('\tprivate void pasteTextToRemote(String text)')
+method_end = sa.index('\n\t@Override public void onWindowFocusChanged', method_start)
+method = sa[method_start:method_end]
+updated = method
+if 'mClipboardManager.setClipboardData(text);' not in updated:
+    old_call = '\t\tLibFreeRDP.sendClipboardData(instance, text);'
+    assert old_call in updated
+    updated = updated.replace(
+        old_call,
+        '\t\t// 对话框关闭后的焦点回调会重新上传本地剪贴板；先同步内容，避免旧值覆盖本次文本。\n'
+        '\t\tmClipboardManager.setClipboardData(text);\n' + old_call,
+        1)
+updated = updated.replace('\t\t}, 50);', '\t\t}, 200);', 1)
+if updated != method:
+    sa = sa[:method_start] + updated + sa[method_end:]
+    sap.write_text(sa, encoding='utf-8')
+    print('    updated: SessionActivity.java pasteTextToRemote')
 PY
 
 if [[ "${SKIP_BUILD:-0}" == "1" ]]; then

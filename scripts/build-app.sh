@@ -44,6 +44,8 @@ esac
 # ---------------------------------------------------------------- 环境
 export ANDROID_HOME="${ANDROID_HOME:-$REPO_ROOT/../tools/android-sdk}"
 export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+# 工程会复制到临时目录；用绝对路径指向私有密钥，避免相对路径失效后静默回退 debug 签名。
+export PEERDP_SECRETS_DIR="${PEERDP_SECRETS_DIR:-$REPO_ROOT/../peerrdp-secrets}"
 if [[ -z "${JAVA_HOME:-}" ]]; then
   for j in /usr/lib/jvm/java-17-openjdk-amd64 /usr/lib/jvm/java-21-openjdk-amd64; do
     if [[ -x "$j/bin/java" ]]; then export JAVA_HOME="$j"; break; fi

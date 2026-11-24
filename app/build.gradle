@@ -7,7 +7,8 @@ apply plugin: 'com.google.devtools.ksp'
 // 两者都缺失时回退 debug 签名，保证无密钥环境下仍可构建。
 def keystorePropsFile = rootProject.file('keystore.properties')
 if (!keystorePropsFile.exists()) {
-    def secretsProps = rootProject.file('../peerrdp-secrets/keystore.properties')
+    def secretsDir = System.getenv('PEERDP_SECRETS_DIR')
+    def secretsProps = secretsDir ? new File(secretsDir, 'keystore.properties') : rootProject.file('../peerrdp-secrets/keystore.properties')
     if (secretsProps.exists()) keystorePropsFile = secretsProps
 }
 def keystoreProps = new Properties()
