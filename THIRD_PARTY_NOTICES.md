@@ -32,7 +32,7 @@ PeerRDP（下称“本项目”）的分发物包含下列第三方软件。本�
 
 ## 2. 关于 FreeRDP 引擎的修改
 
-分发所用的 `app/libs/freeRDPCore-release.aar` 由 FreeRDP 3.33.1 源码构建。构建期共应用 9 处补丁，均为构建配置与依赖镜像版本调整，**未修改任何 `.java` / `.kt` 源文件**。补丁清单见 [SOURCE.md](SOURCE.md)，可执行实现见 [`scripts/build-freerdpcore-aar.sh`](scripts/build-freerdpcore-aar.sh)。
+分发所用的 `app/libs/freeRDPCore-release.aar` 由 FreeRDP 3.33.1 源码构建。构建期除 9 处构建配置与依赖镜像补丁外，还修改了受 MPL-2.0 覆盖的 Android 客户端 Java 源码：调整剪贴板 FileProvider authority，增加输入处理辅助逻辑，并在 `FloatingToolbar.java`、`SessionActivity.java` 及相关资源中加入「粘贴文本」功能。完整修改清单与 Source Code Form 获取方式见 [SOURCE.md](SOURCE.md)，可执行实现见 [`scripts/build-freerdpcore-aar.sh`](scripts/build-freerdpcore-aar.sh)。
 
 受 MPL-2.0 覆盖的源码获取方式见 [SOURCE.md](SOURCE.md)。
 
@@ -635,13 +635,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## 13. GNU Lesser General Public License 3.0 —— EasyTier
 
-`libeasytier_ffi.so` 与 `libeasytier_android_jni.so` 由 EasyTier v2.6.4 源码构建，未修改上游源码，以**独立共享库**形式动态链接（不静态链接进应用自有 `.so`）。LGPL-3.0 完整条款见 [licenses/LGPL-3.0.txt](licenses/LGPL-3.0.txt)。
+`libeasytier_ffi.so` 与 `libeasytier_android_jni.so` 由 EasyTier v2.7.1 源码构建，未修改上游源码，以**独立共享库**形式动态链接（不静态链接进应用自有 `.so`）。LGPL-3.0 完整条款见 [licenses/LGPL-3.0.txt](licenses/LGPL-3.0.txt)。
 
 - 版权：Copyright (C) EasyTier contributors
 - 上游仓库：<https://github.com/EasyTier/EasyTier>
-- 对应源码：<https://github.com/EasyTier/EasyTier/tree/v2.6.4>
+- 对应源码：<https://github.com/EasyTier/EasyTier/tree/v2.7.1>
 - 构建脚本：[`scripts/build-easytier-so.sh`](scripts/build-easytier-so.sh)，编译参数见 [SOURCE.md](SOURCE.md) §6
 - Kotlin 门面：`app/src/main/java/com/easytier/jni/EasyTierJNI.kt` 仅保留 v1 所需的 native 方法声明，按 LGPL-3.0 使用
 
-**可替换性**：两个 `.so` 是 APK 内的独立文件，未做静态链接或混淆处理；任何第三方都可用相同 ABI（`arm64-v8a`）的 EasyTier v2.6.4 构建产物替换后重新打包 APK。重建步骤见 [SOURCE.md](SOURCE.md) §6。
+**可替换性**：两个 `.so` 是 APK 内的独立文件，未做静态链接或混淆处理；任何第三方都可用相同 ABI（`arm64-v8a`）的 EasyTier v2.7.1 构建产物替换后重新打包 APK。重建步骤见 [SOURCE.md](SOURCE.md) §6。
 

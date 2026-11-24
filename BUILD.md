@@ -3,12 +3,12 @@
 > 本文件保存项目构建进度、环境布局与"勿回退"约束，供维护者参考。
 > 详细设计见 `docs/android-rdp-design.md`（§7 构建、§11 里程碑）；当前实现与技术债见 `docs/technical-design.md`；Tailscale 方案见 `docs/tailscale-integration-design.md`。
 > 文中路径以**工作区根**（仓库的上一级）为基准，即 `peerrdp/...`、`tools/...`；`tsnet-android/` 已在 `peerrdp/` 仓库内。
-> 最近更新：2026-11-08
+> 最近更新：2026-11-24（v2.4.2）
 
 ## 1. 项目概况
 
 - 目标：Android RDP 客户端（PeerRDP），FreeRDP 3.33.1 引擎 + Kotlin/Room 应用层
-- 组网：可选 Tailscale（tsnet）用户态节点，RDP 经本地 SOCKS5 走 tailnet
+- 组网：可选 Tailscale（tsnet）或 EasyTier 用户态节点，RDP 经本地 SOCKS5 进入对应虚拟网络；两种配置互斥
 - 仓库：`peerrdp/`（git 根），引擎与 tsnet 均以**预编译 AAR** 消费，工程仅 `:app` 一个模块
 - 设计文档：`peerrdp/docs/android-rdp-design.md`、`peerrdp/docs/technical-design.md`、`peerrdp/docs/tailscale-integration-design.md`
 
@@ -19,8 +19,8 @@
 | 1. 工程骨架 | ✅ 已提交 |
 | 2. freeRDPCore AAR | ✅ 已提交（`peerrdp/app/libs/freeRDPCore-release.aar`，4.9MB） |
 | 3. 应用构建 assembleDebug | ✅ 2026-11-07 构建成功 |
-| 4. APK 校验与产出 | ✅ 产物 `peerrdp/app-debug.apk`（29MB），含 dex 与全部 arm64-v8a 原生库 |
-| 5. 真机实测 | 🟡 进行中：手机直连 VirtualBox VRDE（Linux Mint），画面/鼠标/英文键盘输入正常；中文输入靠远端输入法上屏 |
+| 4. APK 校验与产出 | ✅ 本地产物 `app-debug.apk` 约 59MB、`app-release.apk` 约 69MB，含 dex 与全部 arm64-v8a 原生库 |
+| 5. 真机实测 | ✅ 手机直连 VirtualBox VRDE（Linux Mint）已验证画面、鼠标、英文键盘与远端输入法；v2.4.2 悬浮工具栏「粘贴文本」已实测通过 |
 | 6. Tailscale（tsnet）集成 | 🟡 已实现（2026-11-08，提交 `02a0d91` / `f7ebaed`）：tsnet AAR + 配置页 + 连接绑定 + SOCKS5 联动；待真机验证 tailnet 连接 |
 
 > 2026-11-07 修复：远程桌面画面过小（FreeRDP 默认 1024×768）。`RdpConnector` 现按连接配置的分辨率传 `size=WxH`；新建/编辑页可选 自适应/1280×720/1600×900/1920×1080/2560×1440/1024×768，DB v2 新增 `resolution` 字段（带 1→2 迁移）。
@@ -44,13 +44,13 @@
 
 ### 2.2 许可与权限（2026-11-08）
 
-- 引擎 AAR 为混合许可：FreeRDP 核心与 C JNI 是 Apache-2.0，**freeRDPCore 的 Java/Kotlin（50 个文件）是 MPL-2.0**；OpenSSL 4.0.x、cJSON（MIT）、uriparser/SQLCipher（BSD-3）均宽松。EasyTier 原生库为 LGPL-3.0（见 2.4）。公开发布需补 LICENSE / THIRD_PARTY_NOTICES，并按 MPL §3.2 提供 AAR 源码获取方式（上游 tag + `scripts/build-freerdpcore-aar.sh` 的补丁清单）。
+- 引擎 AAR 为混合许可：FreeRDP 核心与 C JNI 是 Apache-2.0，**freeRDPCore 的 Java/Kotlin（50 个文件）是 MPL-2.0**；OpenSSL 4.0.x、cJSON（MIT）、uriparser/SQLCipher（BSD-3）均宽松。EasyTier 原生库为 LGPL-3.0（见 2.4）。仓库已提供 LICENSE / THIRD_PARTY_NOTICES，并在 SOURCE.md 按 MPL §3.2 说明 AAR 源码获取方式（上游 tag + `scripts/build-freerdpcore-aar.sh` 的补丁清单）。
 - 应用 manifest 用 `tools:node="remove"` 移除引擎合并进来的未使用权限：CAMERA、RECORD_AUDIO、READ/WRITE_EXTERNAL_STORAGE、POST_NOTIFICATIONS；保留 INTERNET、ACCESS_NETWORK_STATE、MODIFY_AUDIO_SETTINGS、ACCESS_WIFI_STATE。`build-app.sh` 构建后会校验权限清单。
 - 引擎/依赖版本已参数化：`build-freerdpcore-aar.sh` 默认 `FREERDP_VERSION=3.33.1`、`OPENSSL_VERSION=4.0.3`（可用同名环境变量覆盖）；缺源码时自动下载，并把版本与镜像实际 sha256 写入 `cmake/DepVersions.cmake`。**2026-11-19 已重编：仓库内 AAR 为 FreeRDP 3.33.1 + OpenSSL 4.0.3 的产物。**
 
 ### 2.3 Tailscale（tsnet）集成（2026-11-08）
 
-- 原生库：`app/libs/tsnet.aar`（15MB，含 `lib/arm64-v8a/libgojni.so`），由仓库内 `tsnet-android/`（Go module，wrapper 源码已入库）用 `scripts/build-tsnet-aar.sh`（`gomobile bind -target=android/arm64 -androidapi=21`）产出；`tsnet-sources.jar` 一并回填到 `app/libs/`。
+- 原生库：`app/libs/tsnet.aar`（约 7.0MB，含 `lib/arm64-v8a/libgojni.so` 约 19MB），由仓库内 `tsnet-android/`（Go module，wrapper 源码已入库）用 `scripts/build-tsnet-aar.sh`（`gomobile bind -target=android/arm64 -androidapi=21`）产出；`tsnet-sources.jar` 一并回填到 `app/libs/`。
 - 版本：`tailscale.com` **v1.104.0**、Go **1.27.1**、gomobile（`golang.org/x/mobile`）；AAR 的 `minSdkVersion=21`，应用 `minSdk=29`。
 - `app/libs/tsnet-sources.jar` 当前仍是 18:08 的早期产物，尚未包含后续新增的 `setNetworkInfo`；运行 `scripts/build-tsnet-aar.sh` 会自动回填最新 sources（AAR 本体已含该方法）。
 - Go 侧 `NewServer` 会设置 `TS_LOGS_DIR=stateDir` 并把 tsnet 日志写到 `stateDir/tsnet.log`；Android 上若不设置该环境变量，`logpolicy` 会因找不到可写日志目录而 panic。
@@ -66,7 +66,7 @@
 
 ### 2.4 EasyTier 集成（2026-11-18）
 
-- 原生库：`app/src/main/jniLibs/arm64-v8a/` 下的 `libeasytier_ffi.so`（18MB）、`libeasytier_android_jni.so`（6MB），由 EasyTier **v2.6.4**（`8428a89`）源码用 `scripts/build-easytier-so.sh` 构建（cargo-ndk + NDK r29，未修改上游源码），已入库。
+- 原生库：`app/src/main/jniLibs/arm64-v8a/` 下的 `libeasytier_ffi.so`（约 17MB）、`libeasytier_android_jni.so`（约 18MB），由 EasyTier **v2.7.1**（`0d9c52b169dc2112687ddefcf571cd01d383193c`）源码用 `scripts/build-easytier-so.sh` 构建（cargo-ndk + NDK r29，未修改上游源码），已入库。
 - 许可：LGPL-3.0。两个 `.so` 为独立动态库、未静态链接进应用自有库，且可被同 ABI 的自行构建产物替换；条款见 `licenses/LGPL-3.0.txt`，源码与构建参数见 `SOURCE.md` §6。
 - v1 只支持 **no_tun + 内置 SOCKS5**（不申请 VpnService）：`data/EasyTierConfigEntity` + `EasyTierConfigDao`（表 `easytier_configs`）；`easytier/EasyTierManager` 生成 TOML、分配本地端口、启动实例并轮询就绪（最长 60s，失败换端口重试一次）；`RdpConnector` 以 `proxy=socks5://127.0.0.1:<port>` 交给 FreeRDP。
 - `ConnectionEditActivity` 的组网方式改为「直连 / Tailscale / EasyTier」单一下拉框（两者互斥），`MainActivity` 菜单新增「EasyTier 配置」。
@@ -106,6 +106,8 @@ scripts/build-tsnet-aar.sh
 scripts/build-easytier-so.sh
 ```
 
+release 签名由 `app/build.gradle` 读取：优先使用仓库根目录 `keystore.properties`（CI 注入），否则读取 `PEERDP_SECRETS_DIR/keystore.properties`；未设置该环境变量时尝试相邻的 `../peerrdp-secrets/keystore.properties`。`build-app.sh` 会把该环境变量默认设为相邻私有目录的绝对路径，因此工程复制到 `/tmp/peerrdp-app-build` 后仍使用同一把 release 密钥，不会再因相对路径失效而回退 debug 签名。若所有配置均缺失，仍可构建临时 debug 签名包，但不能覆盖安装正式版。
+
 ## 5. 勿回退约束（踩坑结论）
 
 - 仓库**只用**官方 `google()` + `mavenCentral()`；阿里云镜像 GMM 不完整 → aapt2 链接库属性全 not found
@@ -136,14 +138,16 @@ scripts/build-easytier-so.sh
   - VRDE **默认单连接**：PC 客户端占着时 PeerRDP 再连会被拒（不是 app 的 bug）
   - 开多连接：`VBoxManage modifyvm "VM名" --vrde-multi-con on`（VM 需关机后执行）；多连接共享同一桌面与键盘焦点
 
-## 7. 输入/键盘机制（2026-11-07 反编译 AAR 确认）
+## 7. 输入/键盘机制（2026-11-24，v2.4.2）
 
-- `SessionView.onCreateInputConnection` 返回 `new BaseInputConnection(view, false)`，`EditorInfo.inputType = 0`
-  - **英文/符号键**：走 `KeyEvent` → `SessionActivity.onKeyDown` → `KeyboardMapper` → 扫描码，**正常**
-  - **手机侧中文输入法**：上屏走 `commitText`，`fullEditor=false` 的 `BaseInputConnection` 无 Editable → **文字被直接丢弃**，这就是"软键盘弹了但远端无反应"
-- 可用替代路径（均已验证/可用）：
-  1. 手机切英文键盘打拼音，由**远端**的输入法（fcitx/ibus）上屏中文 —— 当前采用的方案
-  2. `ExtendedKeyboardView`（浮动工具条里的自绘 PC 键盘）发真实扫描码
-  3. 若要直接用手机中文输入法，需 app 侧加"文本注入"：`GlobalApp.getSessions()` → `SessionState.getInstance()` → `LibFreeRDP.sendUnicodeKeyEvent(instance, ch, down)` 逐字符发送（这些 API 均为 public，AAR 无需改动）
-- `SessionInputManager.toggleKeyboard()` = 显示 `ExtendedKeyboardView` + `showSoftInput(sessionView, 1)` 两件事一起做
-- 浮动工具条静止时只有一个拖拽手柄（`floating_toolbar_handle`），点它才展开出触摸指针 / 键盘两个按钮
+- `SessionView.onCreateInputConnection` 保持上游实现：返回 `new BaseInputConnection(view, false)`，`EditorInfo.inputType = InputType.TYPE_NULL`。
+  - **英文/符号键**：走 `KeyEvent` → `SessionActivity.onKeyDown` → `KeyboardMapper` → 扫描码。
+  - **中文组词**：当前不启用手机侧 `commitText` 输入入口，建议由远端输入法（fcitx/ibus 等）处理。
+- `SessionInputManager` 保留文本按键与剪贴板粘贴回退辅助逻辑；`RdpConnector` 仍显式传递 `kbd=unicode:on`，供支持 Unicode 键盘事件的路径使用。
+- **悬浮工具栏「粘贴文本」**（v2.4.0 新增，v2.4.2 修复）是独立的本地文本入口：
+  1. 点击工具栏粘贴按钮，在手机本地 `EditText` 对话框中输入或粘贴文本；
+  2. 确认后先调用 `mClipboardManager.setClipboardData(text)` 同步本地剪贴板，再调用 `LibFreeRDP.sendClipboardData(instance, text)` 写入远端；
+  3. 等待 200ms，通过 `processVirtualKey` 发送完整 Ctrl+V 按下/抬起序列，由远端应用执行粘贴。
+- 本地剪贴板同步是必需的：对话框关闭后，`SessionActivity.onWindowFocusChanged(true)` 会再次上传本地剪贴板；若不同步，旧内容会覆盖本次待粘贴文本。
+- `SessionInputManager.toggleKeyboard()` = 显示 `ExtendedKeyboardView` + `showSoftInput(sessionView, 1)` 两件事一起做。
+- 浮动工具条静止时只有一个拖拽手柄，展开后提供触摸指针、键盘、粘贴文本和更多功能按钮。

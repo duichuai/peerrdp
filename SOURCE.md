@@ -11,7 +11,7 @@
 
 ## 2. 构建期修改
 
-AAR 由上述源码构建，构建期共应用 9 处补丁，全部为构建配置，未修改任何受 MPL-2.0 覆盖的 `.java` / `.kt` 源文件：
+AAR 由上述源码构建。构建脚本先应用 9 处构建配置与依赖补丁，再应用 Android 客户端功能补丁；其中功能补丁会修改受 MPL-2.0 覆盖的 Java 源文件：
 
 1. `gradle/wrapper/gradle-wrapper.properties` → Gradle 9.6.1（腾讯镜像）
 2. `settings.gradle` → 仅保留 `:freeRDPCore` 模块
@@ -22,8 +22,11 @@ AAR 由上述源码构建，构建期共应用 9 处补丁，全部为构建配�
 7. `gradle.properties` → 调整 JVM 堆与并行度
 8. `client/Android/cmake/External*.cmake` → 依赖镜像改为本地路径
 9. `cmake/DepVersions.cmake` → 按实际镜像文件写入依赖版本与 sha256
+10. `ClipboardImageProvider.java` 与引擎 `AndroidManifest.xml` → 剪贴板 FileProvider authority 改为 `com.peerrdp.freerdpcore.clipboard`，避免与其他 FreeRDP 客户端冲突
+11. `SessionView.java`、`SessionInputManager.java` → 增加文本输入回调、文本按键与剪贴板粘贴回退辅助逻辑；当前 `SessionView` 保持上游 `TYPE_NULL` + `BaseInputConnection`，中文组词由远端输入法处理
+12. `FloatingToolbar.java`、`SessionActivity.java` 及工具栏布局、字符串和图标资源 → 新增「粘贴文本」入口；确认文本后先同步 Android 本地剪贴板，再调用 `LibFreeRDP.sendClipboardData`，等待 200ms 后发送 Ctrl+V，避免焦点恢复时旧剪贴板覆盖本次内容
 
-完整且可执行的补丁实现见仓库脚本 [`scripts/build-freerdpcore-aar.sh`](scripts/build-freerdpcore-aar.sh)。该脚本会自动下载对应版本的上游源码、应用上述补丁并编译，因此执行它即可获得与本 AAR 相同的 Source Code Form（脚本默认版本即 FreeRDP 3.33.1）。
+完整且可执行的补丁实现见仓库脚本 [`scripts/build-freerdpcore-aar.sh`](scripts/build-freerdpcore-aar.sh)。该脚本会自动下载对应版本的上游源码、应用上述补丁并编译，提供本 AAR 对应的 Source Code Form（脚本默认版本即 FreeRDP 3.33.1）。
 
 ## 3. tsnet AAR 源码
 

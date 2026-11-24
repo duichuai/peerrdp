@@ -8,7 +8,7 @@
 # 流程：
 #   1) 把仓库同步到 /tmp 工作区（共享挂载盘（CIFS/vboxsf）不支持符号链接，不能就地构建）
 #   2) 缺少上游源码或依赖镜像时，按版本自动下载
-#   3) 在上游 Studio 工程上打齐 11 处必要补丁（见下方 PATCH 说明）
+#   3) 在上游 Studio 工程上打齐 12 处必要补丁（见下方 PATCH 说明）
 #   4) ./gradlew :freeRDPCore:assembleRelease
 #   5) AAR 回填到 <repo>/app/libs/ 并校验内容
 #
@@ -45,10 +45,11 @@
 #      com.freerdp.freerdpcore.clipboard，任何两个内嵌 freeRDPCore 的应用共存即报
 #      INSTALL_FAILED_CONFLICTING_PROVIDER(-13)；调用方 ClipboardManagerProxy 引用
 #      AUTHORITY/CONTENT_URI 常量，自动跟随，无需修改）
-#  11. SessionView / SessionInputManager → 客户端输入法文本输入（上游 inputType=TYPE_NULL
-#      且 commitText 被丢弃，只能靠服务器输入法）。改为 TYPE_CLASS_TEXT，自定义
-#      InputConnection 把提交的文本逐 UTF-16 单元转成 RDP Unicode 按键事件，退格/删除转为
-#      VK_BACK/VK_DELETE，IME 回车的 key event 走原有物理键盘通道
+#  11. SessionView / SessionInputManager → 增加文本输入回调、文本按键与剪贴板回退辅助逻辑；
+#      SessionView 保持上游 TYPE_NULL + BaseInputConnection，中文组词由远端输入法处理
+#  12. FloatingToolbar / SessionActivity → 新增「粘贴文本」入口；先同步 Android 本地剪贴板，
+#      再调用 LibFreeRDP.sendClipboardData，等待 200ms 后发送完整 Ctrl+V 按键序列，
+#      避免对话框关闭后的焦点回调重新上传旧剪贴板并覆盖本次文本
 # =============================================================================
 set -euo pipefail
 
@@ -388,8 +389,8 @@ grep -q "openssl-$OPENSSL_VERSION" "$DEP_VERSIONS" \
   || die "DepVersions.cmake 未写入 OpenSSL $OPENSSL_VERSION"
 echo "    DepVersions.cmake 已锁定当前版本与镜像哈希"
 
-# ---------------------------------------------------------------- PATCH 10/10
-log "补丁 10/10：ClipboardImageProvider authority → com.peerrdp.freerdpcore.clipboard"
+# ---------------------------------------------------------------- PATCH 10/12
+log "补丁 10/12：ClipboardImageProvider authority → com.peerrdp.freerdpcore.clipboard"
 python3 - "$STUDIO/freeRDPCore/src/main/java/com/freerdp/freerdpcore/utils/ClipboardImageProvider.java" \
           "$STUDIO/freeRDPCore/src/main/AndroidManifest.xml" <<'PY'
 import sys
@@ -405,8 +406,8 @@ for p in sys.argv[1:3]:
     print('    patched:', p.rsplit('/', 3)[-3] + '/' + p.rsplit('/', 2)[-2] + '/' + p.rsplit('/', 1)[-1])
 PY
 
-# ---------------------------------------------------------------- PATCH 11/11
-log "补丁 11/11：客户端输入法文本输入（InputConnection → RDP Unicode 事件）"
+# ---------------------------------------------------------------- PATCH 11/12
+log "补丁 11/12：SessionView / SessionInputManager 输入辅助（保留 TYPE_NULL）"
 python3 - "$STUDIO/freeRDPCore/src/main/java/com/freerdp/freerdpcore/presentation/SessionView.java" \
           "$STUDIO/freeRDPCore/src/main/java/com/freerdp/freerdpcore/presentation/SessionInputManager.java" <<'PY'
 import sys
@@ -439,7 +440,7 @@ else:
         '\t\tboolean onSessionViewImeKeyEvent(KeyEvent event);\n'
         '\t}\n', 1)
 
-    # 3) TYPE_NULL → TYPE_CLASS_TEXT，并换上真正转发文本的 InputConnection
+    # 3) 保持上游 TYPE_NULL + BaseInputConnection，不启用手机侧组词输入
     old = (
         '\t@Override public InputConnection onCreateInputConnection(EditorInfo outAttrs)\n'
         '\t{\n'

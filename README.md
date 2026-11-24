@@ -2,14 +2,15 @@
 
 PeerRDP 是一个面向 Android 的远程桌面（RDP）客户端。引擎基于 [FreeRDP](https://github.com/FreeRDP/FreeRDP) 3.33.1，以预编译 AAR 形式集成；应用层使用 Kotlin + Room。可选集成 Tailscale（tsnet）或 [EasyTier](https://github.com/EasyTier/EasyTier) 组网：通过应用内本地 SOCKS5 代理连接目标主机。
 
-> 本项目为独立开发，与 FreeRDP、Tailscale 项目无隶属或背书关系。
+> 本项目为独立开发，与 FreeRDP、Tailscale、EasyTier 项目无隶属或背书关系。
 
 ## 功能
 
 - RDP 连接配置的增删改查（名称、主机、端口、用户名、密码、分辨率）
 - 分辨率：自适应 / 1280×720 / 1600×900 / 1920×1080 / 2560×1440 / 2560×1600 / 2880×1800 / 3440×1440 / 3840×2160 / 1024×768
 - 触摸指针、手势操作与可展开的浮动工具条
-- 英文/符号键直接发送扫描码；中文由客户端输入法本地组词，提交后以 Unicode 事件发送到远端
+- 英文/符号键直接发送扫描码；中文建议使用远端输入法上屏
+- 悬浮工具栏提供「粘贴文本」：在手机本地输入框中输入或粘贴任意文本，确认后同步本地与远端剪贴板并发送 Ctrl+V，由远端应用完成粘贴
 - 连接配置复制后新建
 - Tailscale（可选）：保存 Headscale 控制面 URL / pre-auth key / 节点名，RDP 连接可绑定该配置；RDP 流量经应用内 tsnet 的本地 SOCKS5 代理进入 tailnet（用户态运行，不申请 `VpnService`，不与系统其他 VPN 冲突）
 - EasyTier（可选）：保存网络名 / 网络密钥 / 对等节点，RDP 连接可绑定该配置；以 no_tun 模式运行并将流量交给内置 SOCKS5，同样不申请 `VpnService`。与 Tailscale 配置互斥
@@ -18,8 +19,8 @@ PeerRDP 是一个面向 Android 的远程桌面（RDP）客户端。引擎基于
 
 1. 准备自托管 Headscale 控制面（部署与 nginx 反代说明见 `peerrdp-secrets/network-setup-guide.md`）。
 2. 目标 Windows 主机安装 Tailscale 客户端并加入同一 tailnet，记录其 `100.x.y.z` 虚拟 IP。
-3. 打开主界面左下角的 Tailscale 按钮，填写控制面 URL、pre-auth key、节点名后保存。
-4. 编辑 RDP 连接，在「Tailscale 配置」下拉框选择该配置；主机地址填写目标主机的 tailnet IP（当前未使用 MagicDNS）。
+3. 打开主界面右上角菜单 →「Tailscale 配置」，填写控制面 URL、pre-auth key、节点名后保存。
+4. 编辑 RDP 连接，在「组网方式」下拉框选择 Tailscale，再选择该配置；主机地址填写目标主机的 tailnet IP（当前未使用 MagicDNS）。
 5. 点击连接：应用自动启动 tsnet 并等待节点进入 `running`（最长 60 秒），随后通过 `127.0.0.1` 上的 SOCKS5 代理发起 RDP。直连或 DERP 中继由 Tailscale 自动选择。
 
 当前限制：没有前台服务与状态页，应用进程被系统回收后 tsnet 随之停止；界面只提供单套 tsnet 配置的快捷编辑，暂不支持配置列表与删除。
@@ -54,7 +55,9 @@ bash scripts/build-app.sh                  # debug  → app-debug.apk
 bash scripts/build-app.sh release          # release → app-release.apk（固定 release 密钥签名）
 ```
 
-产物会复制到仓库根目录。构建脚本会校验 APK 内容与权限清单。
+产物会复制到仓库根目录。构建脚本会校验 APK 内容、权限清单、EasyTier 原生库的 16KB 页对齐及 zipalign。
+
+release 签名优先读取仓库根目录的 `keystore.properties`（CI 使用）；否则读取 `PEERDP_SECRETS_DIR/keystore.properties`，未设置该环境变量时尝试相邻的 `../peerrdp-secrets/keystore.properties`。本地 `build-app.sh` 会将该变量默认设为相邻私有目录的绝对路径，使临时构建目录也能读取同一把私有 release 密钥，也可自行设置变量覆盖路径。所有配置均缺失时回退 debug 签名，此类 APK 不能覆盖安装正式版。
 
 更详细的构建说明、环境布局与「勿回退」约束见 [BUILD.md](BUILD.md)。
 
@@ -102,7 +105,7 @@ APK 仅申请下列权限。引擎 AAR 声明的相机、录音、外部存储�
 ## 许可证
 
 - 本项目自身代码：[Apache License 2.0](LICENSE)，Copyright 2026 duichuai。
-- 引擎 AAR（`app/libs/freeRDPCore-release.aar`）为第三方作品：FreeRDP 核心库与 C JNI 为 Apache-2.0；**`com.freerdp.freerdpcore` 的 Java/Kotlin 客户端代码为 MPL-2.0**（另有 2 个源自 AOSP 的文件为 Apache-2.0）。本项目未修改其源码。
+- 引擎 AAR（`app/libs/freeRDPCore-release.aar`）为第三方作品：FreeRDP 核心库与 C JNI 为 Apache-2.0；**`com.freerdp.freerdpcore` 的 Java/Kotlin 客户端代码为 MPL-2.0**（另有 2 个源自 AOSP 的文件为 Apache-2.0）。本项目通过 `scripts/build-freerdpcore-aar.sh` 对 Android 客户端应用了剪贴板 authority、输入处理及悬浮工具栏等补丁，修改说明与对应源码获取方式见 [SOURCE.md](SOURCE.md)。
 - tsnet AAR（`app/libs/tsnet.aar`）由 `tsnet-android` Go wrapper 构建，包含 Tailscale/tsnet（BSD-3-Clause）、wireguard-go（MIT）、gVisor（Apache-2.0）、Go 运行时与 gomobile（BSD-3-Clause），详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 - EasyTier 原生库（`app/src/main/jniLibs/arm64-v8a/libeasytier_*.so`）为 **LGPL-3.0**，由 EasyTier v2.7.1 源码构建且未修改上游代码；作为独立动态库分发，可按 [SOURCE.md](SOURCE.md) §6 重建替换，条款见 [licenses/LGPL-3.0.txt](licenses/LGPL-3.0.txt)。
 - 其余第三方组件（OpenSSL、cJSON、uriparser、SQLCipher、AndroidX、Kotlin 等）的许可证与声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
@@ -118,6 +121,6 @@ APK 仅申请下列权限。引擎 AAR 声明的相机、录音、外部存储�
 
 - 仅构建 `arm64-v8a`。
 - release 使用固定 release 密钥（别名 `androiddebugkey`，密钥与口令不入库），仅适合侧载/自用，不适合上架应用商店。
-- 集成 tsnet 与 EasyTier 后 release APK 约 59MB，其中 `lib/arm64-v8a/libgojni.so` 约 19MB、`libeasytier_ffi.so` 约 18MB。
-- 手机侧中文输入法直接上屏受引擎输入连接实现限制，建议使用远端输入法。
+- 集成 tsnet 与 EasyTier 后，本地 release APK 约 69MB，其中 `lib/arm64-v8a/libgojni.so` 约 19MB、`libeasytier_ffi.so` 约 17MB、`libeasytier_android_jni.so` 约 18MB。
+- 会话页仍使用上游 `TYPE_NULL` 输入连接，手机侧中文输入法不能直接在会话中组词上屏；可使用远端输入法，或通过悬浮工具栏的「粘贴文本」在本地输入后粘贴到远端。
 - 若远端为 VirtualBox VRDE，默认只允许单连接，需开启多连接后才能与其他客户端并存。

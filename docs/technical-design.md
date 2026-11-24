@@ -2,10 +2,10 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v1.2 |
+| 文档版本 | v1.3 |
 | 生成日期 | 2026-11-07 |
-| 更新日期 | 2026-11-08 |
-| 状态 | 已实现（基础版本对应提交 `01a51aa`；Tailscale 集成为 `02a0d91` / `f7ebaed`） |
+| 更新日期 | 2026-11-24 |
+| 状态 | 已实现（当前版本 v2.4.2，提交 `e6d273c`） |
 | 关联文档 | [android-rdp-design.md](./android-rdp-design.md)（方案设计 / 决策记录）、[tailscale-integration-design.md](./tailscale-integration-design.md)（Tailscale 方案） |
 | 代码位置 | `peerrdp/`（Gradle 根工程，唯一模块 `:app`）；tsnet wrapper 在 `peerrdp/tsnet-android/` |
 
@@ -29,7 +29,7 @@
 | tsnet / tsnet AAR | `app/libs/tsnet.aar`，Tailscale 的 Go 用户态节点库（经 gomobile 封装），含 `libgojni.so` |
 | Headscale | 自托管的 Tailscale 控制面，签发 pre-auth key、管理 tailnet 节点 |
 | tailnet IP | Tailscale 分配给节点的 `100.64.0.0/10` 虚拟地址，RDP 主机字段填写该地址 |
-| SOCKS5 代理 | tsnet 在 `127.0.0.1:随机端口` 启动的本地代理，FreeRDP 通过 `/proxy:socks5://...` 使用 |
+| SOCKS5 代理 | tsnet 或 EasyTier 在 `127.0.0.1:随机端口` 提供的本地代理，FreeRDP 通过 `/proxy:socks5://...` 使用 |
 | 自适应分辨率 | 连接配置的一种取值（`adaptive`），表示按手机屏幕可视区域计算桌面尺寸 |
 | 会话页 | 引擎提供的 `com.freerdp.freerdpcore.presentation.SessionActivity` |
 
@@ -42,18 +42,18 @@
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ UI 层                                                    │
-│  MainActivity（列表 / 连接入口 / Tailscale 配置入口）      │
-│  ConnectionEditActivity（新建 / 编辑 / 绑定 Tailscale）    │
-│  TailscaleConfigEditActivity（tsnet 配置）                │
-│  SessionActivity（复用 AAR，不可修改）                    │
+│  MainActivity（列表 / 连接 / 组网配置入口）                │
+│  ConnectionEditActivity（新建 / 编辑 / 绑定组网）          │
+│  Tailscale / EasyTier ConfigEditActivity（组网配置）       │
+│  SessionActivity（复用 AAR，构建期补丁定制）               │
 ├─────────────────────────────────────────────────────────┤
 │ 连接适配层（本工程与引擎的耦合点）                         │
 │  RdpConnector：ConnectionEntity → freerdp:// URI         │
-│  TailscaleManager：启停 tsnet、读取状态、SOCKS5 地址       │
+│  TailscaleManager / EasyTierManager：启停与 SOCKS5 联动    │
 ├─────────────────────────────────────────────────────────┤
 │ 数据层                                                   │
-│  Room（peerrdp.db, v4）/ ConnectionDao / TailscaleConfigDao │
-│  ConnectionEntity / TailscaleConfigEntity                │
+│  Room（peerrdp.db, v5）/ 三类配置 DAO                      │
+│  Connection / TailscaleConfig / EasyTierConfig Entity     │
 ├─────────────────────────────────────────────────────────┤
 │ 引擎层（AAR + .so）                                       │
 │  LibFreeRDP（JNI）→ libfreerdp3 / libwinpr3 / libssl …   │
@@ -65,11 +65,11 @@
 
 | 决策 | 结论 | 影响 |
 | --- | --- | --- |
-| 协议实现 | 不自研，复用 `freeRDPCore` 预编译 AAR | 免去 NDK 编译；引擎内部不可改，只能通过 URI 参数影响行为 |
+| 协议实现 | 不自研，复用 `freeRDPCore` 预编译 AAR | 日常应用构建免去 NDK 编译；升级或调整引擎功能时通过 `build-freerdpcore-aar.sh` 的源码补丁重编 AAR |
 | 会话 UI | 直接复用 `SessionActivity`，不自绘 | 触摸/键盘/手势由引擎提供；样式与系统栏适配受 AAR 约束 |
-| 与引擎通信 | 主路径只走 URI（`freerdp://...`），不直接调用 `LibFreeRDP` Java API | 耦合面最小，但能力受 URI 解析器支持的参数集限制；例外见 6.3（文本注入用公开 API） |
+| 与引擎通信 | 应用层连接参数只走 URI（`freerdp://...`） | 耦合面最小，但能力受 URI 解析器支持的参数集限制；AAR 内「粘贴文本」直接调用公开 JNI API，见 6.3 |
 | 数据存储 | Room + Kotlin Coroutines/Flow | 列表自动刷新；需要手写迁移，不能 `fallbackToDestructiveMigration` |
-| 组网方式 | Tailscale tsnet 用户态 + 本地 SOCKS5，不申请 `VpnService` | 不需要系统 VPN 权限、可与其它 VPN 共存；RDP 通过 `/proxy:socks5://` 接入，需多一步等待节点就绪 |
+| 组网方式 | Tailscale tsnet 或 EasyTier no_tun + 本地 SOCKS5，不申请 `VpnService` | 不需要系统 VPN 权限、可与其它 VPN 共存；RDP 通过 `/proxy:socks5://` 接入，需多一步等待节点就绪；两种方式互斥 |
 
 ### 2.3 运行时组件关系
 
@@ -103,9 +103,10 @@ RdpConnector ──startActivity──▶ SessionActivity（AAR）
 | compileSdk / targetSdk / minSdk | 37 / 37 / 29 |
 | ABI | 仅 `arm64-v8a` |
 | UI | ViewBinding + Material 3（`material:1.14.0`）、AppCompat |
-| 数据 | Room 2.8.5（KSP）、coroutines 1.11.0；数据库 `peerrdp.db` v4 |
+| 数据 | Room 2.8.5（KSP）、coroutines 1.11.0；数据库 `peerrdp.db` v5（连接、Tailscale、EasyTier 配置） |
 | 引擎 | `freeRDPCore-release.aar`（4.8MB，含 `libfreerdp3`、`libwinpr3`、`libssl`、`libcrypto`、`libsqlcipher` 等） |
-| 组网 | `tsnet.aar`（**7.0MB**，`tailscale.com` v1.104.0 + Go 1.27.1，含 `libgojni.so` 19MB，`minSdk 21`；已用 `-ldflags="-s -w"` + `ts_omit_*` 裁剪，详见 `docs/tailscale-integration-design.md` §4.3） |
+| Tailscale 组网 | `tsnet.aar`（**约 7.0MB**，`tailscale.com` v1.104.0 + Go 1.27.1，含 `libgojni.so` 约 19MB，`minSdk 21`；已用 `-ldflags="-s -w"` + `ts_omit_*` 裁剪，详见 `docs/tailscale-integration-design.md` §4.3） |
+| EasyTier 组网 | EasyTier v2.7.1 原生库（`libeasytier_ffi.so` 约 17MB、`libeasytier_android_jni.so` 约 18MB），no_tun + 内置 SOCKS5 |
 | 签名 | 固定 release keystore（PKCS12，别名 `androiddebugkey`），由 `keystore.properties` 提供，密钥与口令不入库 |
 | 构建内存约束 | `-Xmx1408m`、`workers.max=1`、`parallel=false`（构建机内存有限） |
 
@@ -115,7 +116,7 @@ RdpConnector ──startActivity──▶ SessionActivity（AAR）
 
 ## 4. 数据层设计
 
-### 4.1 表结构（`connections`，DB 版本 4）
+### 4.1 表结构（`connections`，当前 DB 版本 5）
 
 | 字段 | 类型 | 约束 / 默认 | 说明 |
 | --- | --- | --- | --- |
@@ -127,7 +128,8 @@ RdpConnector ──startActivity──▶ SessionActivity（AAR）
 | password | TEXT | NOT NULL, 默认 `""` | 空串 = 不保存，连接时弹框询问 |
 | domain | TEXT | NOT NULL, 默认 `""` | 可选域 |
 | resolution | TEXT | NOT NULL, 默认 `adaptive` | `adaptive` 或 `WxH` |
-| tailscaleConfigId | INTEGER | NOT NULL, 默认 0 | 绑定的 `tailscale_configs.id`；0 = 直连 |
+| tailscaleConfigId | INTEGER | NOT NULL, 默认 0 | 绑定的 `tailscale_configs.id`；0 = 不使用 Tailscale |
+| easytierConfigId | INTEGER | NOT NULL, 默认 0 | 绑定的 `easytier_configs.id`；0 = 不使用 EasyTier，与 Tailscale 互斥 |
 | createdAt | INTEGER | NOT NULL | 创建时间戳 |
 | lastUsedAt | INTEGER | NOT NULL, 默认 0 | 最近使用时间戳，用于排序 |
 
@@ -139,12 +141,16 @@ ALTER TABLE connections ADD COLUMN resolution TEXT NOT NULL DEFAULT 'adaptive';
 
 -- MIGRATION_3_4
 ALTER TABLE connections ADD COLUMN tailscaleConfigId INTEGER NOT NULL DEFAULT 0;
+
+-- MIGRATION_4_5
+ALTER TABLE connections ADD COLUMN easytierConfigId INTEGER NOT NULL DEFAULT 0;
+-- 同一迁移还创建 easytier_configs 表。
 ```
 
 设计要点：
 
-- **版本必须连续迁移**：v1 已安装过，升级到 v4 不能清库；新加字段一律带默认值。
-- **Tailscale 绑定允许悬空**：`tailscaleConfigId` 指向的配置被删除后不阻断列表与编辑；连接时 `RdpConnector` 抛「配置不存在」错误并以 Toast 提示。
+- **版本必须连续迁移**：v1 已安装过，升级到当前 v5 不能清库；新加字段一律带默认值。
+- **组网绑定允许悬空**：`tailscaleConfigId` / `easytierConfigId` 指向的配置被删除后不阻断列表与编辑；连接时 `RdpConnector` 抛「配置不存在」错误并以 Toast 提示。两种组网配置互斥，均为 0 时直连。
 - **排序规则**：`ORDER BY lastUsedAt DESC, createdAt DESC`，点击连接即 `touch()` 更新 `lastUsedAt`。
 - **密码默认不落库**：编辑页留空即保存空串，连接时由 `MainActivity.promptPassword()` 询问，且不写回。
 
@@ -176,6 +182,8 @@ CREATE TABLE IF NOT EXISTS tailscale_configs (
 
 DAO 契约：`observeAll()`、`getAll()`、`getById(id)`、`insert`、`update`、`delete(id)`。
 
+数据库 v5 另新增 `easytier_configs`，保存名称、网络名、网络密钥、对等节点、固定虚拟 IP、DHCP 开关及节点主机名；`ConnectionEntity.easytierConfigId` 与 `tailscaleConfigId` 在编辑页按「直连 / Tailscale / EasyTier」单选互斥。
+
 ### 4.3 DAO 契约
 
 | 方法 | 类型 | 说明 |
@@ -189,7 +197,7 @@ DAO 契约：`observeAll()`、`getAll()`、`getById(id)`、`insert`、`update`�
 
 ### 4.4 已知风险
 
-**密码与 authKey 明文存储**：`connections.password` 与 `tailscale_configs.authKey` 均直接写入未加密的 SQLite。当前仅限自用；authKey 可设置过期/一次性以降低泄露影响，若要多设备/共享使用，需引入 Keystore 加密或 SQLCipher（依赖已在，但应用库未启用）。
+**密码与组网凭据明文存储**：`connections.password`、`tailscale_configs.authKey` 与 `easytier_configs.networkSecret` 均直接写入未加密的 SQLite。当前仅限自用；authKey 可设置过期/一次性以降低泄露影响，若要多设备/共享使用，需引入 Keystore 加密或 SQLCipher（依赖已在，但应用库未启用）。
 
 ---
 
@@ -199,15 +207,15 @@ DAO 契约：`observeAll()`、`getAll()`、`getById(id)`、`insert`、`update`�
 
 - 数据：`lifecycleScope` 收集 `observeAll()`，`ListAdapter` + `DiffUtil` 提交（比较 `id` 与整对象相等）。
 - 绑定：名称（空则 host）、`host:port`、用户名；空列表显示 `emptyView`。
-- 交互：右下 FAB 新建；左下 FAB 打开 Tailscale 配置（已有配置时回填最近创建的一条）；点击连接；长按弹出「复制 / 编辑 / 删除」（删除二次确认）。
-- 连接：先后台 `touch()`，再判断密码：为空走 `promptPassword()` 对话框，否则直接连接。连接在 `lifecycleScope` 协程中执行并捕获 `Throwable`，失败以 Toast 显示（含 tsnet 日志尾部）。
+- 交互：右下 FAB 新建；右上角菜单分别打开 Tailscale / EasyTier 配置（已有配置时回填最近创建的一条）；点击连接；长按弹出「复制 / 编辑 / 删除」（删除二次确认）。
+- 连接：先后台 `touch()`，再判断密码：为空走 `promptPassword()` 对话框，否则直接连接。连接在 `lifecycleScope` 协程中执行并捕获 `Throwable`，失败以 Toast 显示（含可用的组网错误详情）。
 
 ### 5.2 编辑页 `ConnectionEditActivity`
 
 - 新建与编辑共用；`EXTRA_CONNECTION_ID`（默认 -1）区分，`EXTRA_COPY_FROM_ID` 用于复制新建。
 - 校验：host 非空、port 必须为 1–65535 的整数，错误通过 `TextInputLayout.error` 展示。
 - 分辨率：`MaterialAutoCompleteTextView` 下拉，显示文案与取值由 `arrays.xml` 中两个等长数组按索引对应（见 5.3）。
-- Tailscale：`Spinner` 下拉，选项为「不使用 Tailscale（直连）」+ 已保存配置（显示 `名称 (controlURL)`）；选中项写入 `tailscaleConfigId`。配置与连接按顺序加载，避免异步回显覆盖选中值。
+- 组网方式：`Spinner` 单选「直连 / Tailscale / EasyTier」，再选择对应已保存配置；选中项分别写入 `tailscaleConfigId` 或 `easytierConfigId`，另一种配置 ID 归零。配置与连接按顺序加载，避免异步回显覆盖选中值。
 - 保存：保留原 `id`、`createdAt`、`lastUsedAt`；新增时 `createdAt` 取当前时间。
 
 ### 5.3 分辨率策略（核心设计）
@@ -221,6 +229,10 @@ DAO 契约：`observeAll()`、`getAll()`、`getById(id)`、`insert`、`update`�
 | 1600 × 900 | `1600x900` |
 | 1920 × 1080 | `1920x1080` |
 | 2560 × 1440 | `2560x1440` |
+| 2560 × 1600 | `2560x1600` |
+| 2880 × 1800 | `2880x1800` |
+| 3440 × 1440 | `3440x1440` |
+| 3840 × 2160 | `3840x2160` |
 | 1024 × 768 | `1024x768` |
 
 **解析规则**（`RdpConnector.desktopSize`）：
@@ -243,14 +255,16 @@ DAO 契约：`observeAll()`、`getAll()`、`getById(id)`、`insert`、`update`�
 
 ### 5.4 会话页（复用）
 
-引擎的 `SessionActivity` 通过 `LibFreeRDP.setConnectionInfo(Uri)` 把 URI 解析成 xfreerdp 参数并发起连接，画面回调渲染到 `SessionView`（内部为 `ScrollView2D` + 手势缩放 + 触摸指针）。本工程不修改、不继承该页面，只通过 Intent data 影响其行为。
+引擎的 `SessionActivity` 通过 `LibFreeRDP.setConnectionInfo(Uri)` 把 URI 解析成 xfreerdp 参数并发起连接，画面回调渲染到 `SessionView`（内部为 `ScrollView2D` + 手势缩放 + 触摸指针）。应用层不继承该页面，通过 Intent data 传入连接参数；AAR 构建补丁另在 `SessionActivity` 与 `FloatingToolbar` 中加入「粘贴文本」入口，具体输入行为见 6.3。
 
 ### 5.5 Tailscale 配置页 `TailscaleConfigEditActivity`
 
-- 入口：列表页左下 FAB；已有配置时打开最近创建的一条并回填，否则新建。当前 UI 为单配置快捷编辑，没有配置列表与删除入口（DAO 已提供 `delete`）。
+- 入口：列表页右上角菜单；已有配置时打开最近创建的一条并回填，否则新建。当前 UI 为单配置快捷编辑，没有配置列表与删除入口（DAO 已提供 `delete`）。
 - 字段：名称、Headscale 控制面 URL、pre-auth key、主机名（默认 `peerrdp`）；`stateDir` 不暴露，由应用自动生成。
 - 校验：名称、控制面 URL、pre-auth key 非空；通过 `TextInputLayout.error` 提示。保存后 `finish()`。
 - 页面布局：`activity_tailscale_config_edit.xml`（Toolbar + ScrollView + 四个输入框 + 保存按钮）。
+
+`EasyTierConfigEditActivity` 同样从主界面右上角菜单进入，采用单配置快捷编辑。字段包括名称、网络名、网络密钥、对等节点、固定虚拟 IP、DHCP 开关与节点主机名；保存到 `easytier_configs`，与 Tailscale 配置在连接编辑页互斥绑定。
 
 ### 5.6 Tailscale 管理器 `TailscaleManager`
 
@@ -293,7 +307,7 @@ freerdp://<user>@<host>[:<port>]/connect?size=<WxH>&p=<password>&d=<domain>[&pro
 | 查询参数 `p` | `/p:<password>`（空则不传） |
 | 查询参数 `d` | `/d:<domain>` |
 | 查询参数 `size` | `/size:<WxH>` |
-| 查询参数 `proxy` | `/proxy:socks5://127.0.0.1:<port>`（仅绑定 Tailscale 配置时附加） |
+| 查询参数 `proxy` | `/proxy:socks5://127.0.0.1:<port>`（绑定 Tailscale 或 EasyTier 配置时附加） |
 | 其他任意查询参数 | 原样转为 `/key:value`；无值转 `/key`；`+key` / `-key` 分别转布尔参数 |
 | 固定附加 | `/gdi:sw`（软件渲染，引擎内部固定，不可关闭） |
 
@@ -301,28 +315,29 @@ freerdp://<user>@<host>[:<port>]/connect?size=<WxH>&p=<password>&d=<domain>[&pro
 
 - 端口为 3389 时可省略；非法端口在应用层先抛异常（编辑页校验已拦截）。
 - 密码经 URI 传递，仅在进程内使用；引擎调试日志可能打印参数，现未开启。
-- `host` 在 Tailscale 模式下必须是目标节点的 tailnet IP；当前不支持 MagicDNS 名称。
-- `proxy` 指向应用进程内的 `127.0.0.1` SOCKS5，随应用进程存活；tsnet 停止后代理失效。
+- `host` 在 Tailscale 模式下必须是目标节点的 tailnet IP；在 EasyTier 模式下应填写目标节点的 EasyTier 虚拟 IP。当前 Tailscale 模式不支持 MagicDNS 名称。
+- `proxy` 指向应用进程内的 `127.0.0.1` SOCKS5，随应用进程存活；tsnet 或 EasyTier 实例停止后代理失效。
 - 可用的 xfreerdp 参数受 AAR 版本支持范围限制（如 `+dynamic-resolution` 未在现用 UI 暴露）。
 
-### 6.2 会话页清单属性（来自 AAR，不可改）
+### 6.2 会话页清单属性（AAR 基线 + 主清单覆盖）
 
 | 属性 | 值 | 影响 |
 | --- | --- | --- |
-| `exported` | true | 外部应用可通过 `freerdp://` 拉起会话 |
+| `exported` | false | 主清单通过 `tools:replace` 关闭外部导出；仅允许本应用显式 Intent 启动，AAR 其他辅助 Activity 也统一关闭导出 |
 | `documentLaunchMode` | always | 每次连接新开任务，退到最近任务可见 |
 | `autoRemoveFromRecents` | true | 会话结束自动从最近任务移除 |
 | `taskAffinity` | `com.freerdp.session` | 会话任务独立于主任务 |
 | `configChanges` | orientation/screenSize/density… | 旋转不重建，分辨率不会重算 |
 | `windowSoftInputMode` | adjustResize | 软键盘弹出时压缩画面 |
 
-### 6.3 输入与键盘契约（2026-11-08 实测 / 反编译结论）
+### 6.3 输入与键盘契约（2026-11-24，v2.4.2）
 
-- `SessionView.onCreateInputConnection` 返回 `BaseInputConnection(view, false)`，且 `EditorInfo.inputType = 0`。
-- **英文 / 符号键**：走 `KeyEvent` → `SessionActivity.onKeyDown` → `KeyboardMapper` → 扫描码，功能正常。
-- **手机侧中文输入法**：`commitText` 因 `fullEditor=false` 没有 `Editable` 而被直接丢弃，表现为"软键盘弹出但远端无输入"。当前方案是切英文键盘打拼音，由**远端输入法**（fcitx/ibus）上屏。
-- 其他可用路径：`ExtendedKeyboardView`（浮动工具条中的自绘 PC 键盘）发送真实扫描码；或调用 AAR 公开 API `LibFreeRDP.sendUnicodeKeyEvent(instance, ch, down)` 逐字符注入，无需修改 AAR。
-- `SessionInputManager.toggleKeyboard()` 同时做两件事：显示 `ExtendedKeyboardView` 与 `showSoftInput(sessionView, 1)`。
+- `SessionView.onCreateInputConnection` 保持上游实现：返回 `BaseInputConnection(view, false)`，且 `EditorInfo.inputType = InputType.TYPE_NULL`。
+- **英文 / 符号键**：走 `KeyEvent` → `SessionActivity.onKeyDown` → `KeyboardMapper` → 扫描码；中文组词当前由**远端输入法**处理，不启用手机侧 `commitText` 入口。
+- `ExtendedKeyboardView`（浮动工具条中的自绘 PC 键盘）发送真实扫描码；`SessionInputManager.toggleKeyboard()` 同时显示扩展键盘并调用 `showSoftInput(sessionView, 1)`。
+- **悬浮工具栏「粘贴文本」**提供独立的本地文本入口：`FloatingToolbar.Listener.onPasteText()` → `SessionActivity.showPasteTextDialog()` → `pasteTextToRemote(text)`。
+- 粘贴实现先执行 `mClipboardManager.setClipboardData(text)`，再执行 `LibFreeRDP.sendClipboardData(instance, text)`，200ms 后通过 `processVirtualKey` 发送 Ctrl+V 完整按下/抬起序列。同步本地剪贴板可避免对话框关闭后的 `onWindowFocusChanged(true)` 重新上传旧内容并覆盖本次文本。
+- `SessionInputManager` 中保留文本按键及非 ASCII 剪贴板回退辅助逻辑，但当前上游 `TYPE_NULL` 输入连接不会触发其 `onSessionViewCommitText` 入口。
 
 ---
 
@@ -338,7 +353,7 @@ freerdp://<user>@<host>[:<port>]/connect?size=<WxH>&p=<password>&d=<domain>[&pro
 connect(): 组装 URI（含 size/p/d）→ 显式 Intent → SessionActivity
 ```
 
-### 7.2 Tailscale 连接
+### 7.2 组网连接
 
 ```
 用户点条目（tailscaleConfigId > 0）
@@ -352,7 +367,7 @@ connect(): 组装 URI（含 size/p/d）→ 显式 Intent → SessionActivity
    → 显式 Intent → SessionActivity
 ```
 
-说明：tsnet 实例在应用进程内常驻，后续连接复用同一节点与代理；退出应用后由系统回收。无前台服务，后台存活时间受系统限制。
+说明：tsnet 实例在应用进程内常驻，后续连接复用同一节点与代理。EasyTier 路径由 `RdpConnector` 调用 `EasyTierManager.ensureReady()`，复用或启动 no_tun 实例，等待内置 SOCKS5 就绪后附加同类 `proxy` 参数。两种实例均无前台服务，退出应用或进程被回收后停止，后台存活时间受系统限制。
 
 ### 7.3 构建发布
 
@@ -362,9 +377,10 @@ connect(): 组装 URI（含 size/p/d）→ 显式 Intent → SessionActivity
 scripts/build-app.sh [debug|release]
   1) 生成 /tmp 工作副本（处理共享挂载盘的 CRLF，修复 gradlew 可执行）
   2) 安装/复用工具链（JDK 17 + Gradle 9.6.1 + SDK）
-  3) :app:assembleDebug | assembleRelease
-  4) 校验产物（dex + arm64-v8a 原生库 + 权限清单）并回填 peerrdp/app-<variant>.apk
-  5) 版本名默认取当前提交可达的最近 v* tag（可用 APP_VERSION_NAME 覆盖），APK 版本号必须与之一致
+  3) PEERDP_SECRETS_DIR 默认指向 ../peerrdp-secrets 的绝对路径，供临时工作副本读取 release 签名
+  4) :app:assembleDebug | assembleRelease
+  5) 校验产物（dex + arm64-v8a 原生库 + 权限清单 + EasyTier 16KB 页对齐 + zipalign）并回填 peerrdp/app-<variant>.apk
+  6) 版本名默认取当前提交可达的最近 v* tag（可用 APP_VERSION_NAME 覆盖），APK 版本号必须与之一致
 ```
 
 **CI 发布**（GitHub Actions）：
@@ -384,10 +400,10 @@ scripts/build-app.sh [debug|release]
 
 | 项 | debug | release |
 | --- | --- | --- |
-| 体积 | 29MB（v2 基线，未含 tsnet；当前未重测） | **约 35MB**（含 tsnet，v1.0.1 优化后实测；原 46MB） |
-| dex | 14.4MB（未压缩） | 2.5MB（R8 收缩） |
-| 原生库 | 12.5MB | 约 31MB（引擎 12.5MB + `libgojni.so` 19MB） |
-| 签名 | debug keystore | **固定 release keystore**（PKCS12，别名 `androiddebugkey`，沿用旧版 debug 密钥副本）；读取顺序：仓库根 `keystore.properties` → `../peerrdp-secrets/keystore.properties` → 两者都缺失时回落 debug 签名；本机与 CI 使用同一把密钥，旧包可直接覆盖升级 |
+| 体积 | 约 59MB（本地产物） | **约 69MB**（本地产物） |
+| dex | 未压缩 | R8 收缩 |
+| 原生库 | 引擎 + tsnet + EasyTier | 同 debug，EasyTier 与整包 zipalign 均按 16KB 页校验 |
+| 签名 | debug keystore | **固定 release keystore**（PKCS12，别名 `androiddebugkey`）；读取顺序：仓库根 `keystore.properties` → `PEERDP_SECRETS_DIR/keystore.properties`（`build-app.sh` 默认指向 `../peerrdp-secrets` 的绝对路径）→ 未设置环境变量时尝试相邻 `../peerrdp-secrets` → 均缺失时回落 debug 签名；本机与 CI 使用同一把密钥，旧包可直接覆盖升级 |
 | 调试 | `jniDebuggable true` | 关闭 |
 | 优化 | 无 | `minifyEnabled` + `shrinkResources` |
 
@@ -403,11 +419,9 @@ scripts/build-app.sh [debug|release]
 
 ### 8.3 产物校验
 
-产物应包含 `lib/arm64-v8a/` 下 11 个原生库：`libfreerdp3`、`libfreerdp-client3`、`libfreerdp-android`、`libwinpr3`、`libssl`、`libcrypto`、`libsqlcipher`、`libcjson`、`liburiparser`、`legacy`、`libgojni`。
+产物应包含 `lib/arm64-v8a/` 下 13 个原生库：`libfreerdp3`、`libfreerdp-client3`、`libfreerdp-android`、`libwinpr3`、`libssl`、`libcrypto`、`libsqlcipher`、`libcjson`、`liburiparser`、`legacy`、`libgojni`、`libeasytier_android_jni`、`libeasytier_ffi`。
 
-构建脚本当前断言：`classes*.dex` 存在，且 `libfreerdp-android`、`libfreerdp3`、`libfreerdp-client3`、`libwinpr3`、`libssl`、`libcrypto`、`libsqlcipher` 共 7 个引擎库存在；输出 SHA-256 便于真机核对。
-
-> `libgojni.so` 由 `tsnet.aar` 合并进 APK，脚本未单独断言；若 `app/libs/tsnet.aar` 缺失会直接构建失败。
+构建脚本当前断言：`classes*.dex` 存在，7 个引擎核心库、`libgojni.so` 与两个 EasyTier 原生库均存在；同时检查权限裁剪、EasyTier LOAD 段 16KB 页对齐及整包 `zipalign -c -P 16 -v 4`，并输出 APK SHA-256 便于核对。
 
 ### 8.4 签名与发布链路（GitHub Actions）
 
@@ -419,6 +433,8 @@ scripts/build-app.sh [debug|release]
 | `peerrdp-secrets` | 本地私有 Gitea | `keystore/peerrdp-release.jks`、`keystore.properties`、token 等敏感信息 |
 
 **密钥注入**：`release.yml` 从仓库 Secrets 读取 `KEYSTORE_B64`、`KEYSTORE_PASSWORD`、`KEY_ALIAS`、`KEY_PASSWORD`，base64 还原 keystore 并生成仓库根 `keystore.properties`；未配置 `KEYSTORE_B64` 时打印警告并回落 debug 签名（产物无法覆盖安装正式包）。
+
+**本地构建**：`scripts/build-app.sh` 将 `PEERDP_SECRETS_DIR` 默认导出为 `../peerrdp-secrets` 的绝对路径。即使主工程被 rsync 到 `/tmp/peerrdp-app-build`，`app/build.gradle` 仍能读取私有 JKS；已用 `apksigner verify --print-certs` 核对 APK 指纹与 `keystore/peerrdp-release.jks` 一致。
 
 **密钥指纹**（SHA-256，用于核对发布包）：
 
@@ -445,38 +461,38 @@ D2:F9:B6:18:C2:F2:FA:04:53:B0:05:96:94:6B:93:1A:CB:
 | 编号 | 问题 | 影响 | 处理建议 |
 | --- | --- | --- | --- |
 | R1 | 密码明文入库 | 本地取证可读 | Keystore 加密字段或启用 SQLCipher |
-| R2 | 会话页 `exported=true` | 任意应用可拉起会话并传参 | 主清单 `tools:node="remove"` 覆盖为 false（本工程只用显式 Intent） |
+| R2 | AAR 会话页及辅助组件默认导出（已修复） | 若恢复默认配置，任意应用可拉起会话并传参 | 主清单已通过 `tools:replace` 将会话页及相关组件统一设为 `exported=false`，后续升级 AAR 时保持覆盖 |
 | R3 | 未处理系统栏/IME insets | 列表页与编辑页内容可能被栏遮挡 | 目标 SDK 37 强制 edge-to-edge，需显式 insets |
 | R4 | 分辨率连接时固定 | 旋转后画面不匹配 | 暴露 `+dynamic-resolution` 或会话侧监听尺寸 |
-| R5 | 连接失败反馈不完整 | `RdpConnector` 抛出的异常（含 tsnet 启动失败）已由 `MainActivity` Toast 展示；引擎内部握手失败仍只会停在会话页 | 监听引擎会话事件，回传 Toast/Snackbar |
+| R5 | 连接失败反馈不完整 | `RdpConnector` 抛出的异常（含组网启动失败）已由 `MainActivity` Toast 展示；引擎内部握手失败仍只会停在会话页 | 监听引擎会话事件，回传 Toast/Snackbar |
 | R6 | 无搜索/排序切换/删除撤销 | 连接多时难用 | 搜索框 + Undo（软删除字段） |
 | R7 | 无自动化测试 | 回归靠手工 | 至少补 DB 迁移与 URI 组装的单元测试 |
 | R8 | `versionCode` 由 tag 推导（x.y.z → x*10000+y*100+z） | 不能按应用商店规则分级 | 已缓解：CI Secrets 注入固定密钥、tag 触发发布（v1.0.1 起）；上架前需另定版本策略 |
-| R9 | 手机侧中文输入法 `commitText` 被引擎输入连接丢弃 | 无法直接用手机输入法上屏 | 改用远端输入法；或在应用层调用 `LibFreeRDP.sendUnicodeKeyEvent` 逐字符注入 |
+| R9 | 当前 `TYPE_NULL` 输入连接不接收手机侧中文组词 | 无法直接在会话中用手机输入法组词上屏 | 使用远端输入法；需要本地输入任意文本时使用悬浮工具栏「粘贴文本」（本地/远端剪贴板同步 + Ctrl+V） |
 | R10 | tsnet 原生层可能 panic / SIGABRT | 应用进程被杀，连接中断 | 已缓解：启动前注入网络信息、Go 侧 `recover`；仍失败时读 `tsnet.log` 定位 |
-| R11 | tsnet 无常驻前台服务 | 应用退到后台久了进程被回收，RDP 断开 | 后续加前台服务（需 `FOREGROUND_SERVICE` 与通知权限）或连接期间保持前台 |
-| R12 | 单 tsnet 实例 / 单配置快捷编辑 | 无法同时使用多个 tailnet 节点，无法在 UI 删除配置 | DAO 已支持多配置；后续补配置列表、切换与删除 |
-| R13 | pre-auth key 明文入库 | 本地取证可读 | 使用一次性/短期 key；与 R1 一并做 Keystore 加密 |
-| R14 | tsnet 使 APK 增大 | 安装包体积偏大 | 已优化：`-ldflags="-s -w"` + `ts_omit_*` 裁剪，`libgojni.so` 30.5MB → 19MB，APK 46MB → 35MB；后续可按 ABI 分包 |
+| R11 | tsnet / EasyTier 均无常驻前台服务 | 应用退到后台久了进程被回收，RDP 断开 | 后续加前台服务（需 `FOREGROUND_SERVICE` 与通知权限）或连接期间保持前台 |
+| R12 | 单 tsnet / EasyTier 实例、单配置快捷编辑 | 无法同时使用多个组网节点，无法在 UI 切换或删除配置 | DAO 已支持多条配置；后续补配置列表、切换与删除 |
+| R13 | pre-auth key 与 EasyTier 网络密钥明文入库 | 本地取证可读 | 使用一次性/短期 key；与 R1 一并做 Keystore 加密 |
+| R14 | 组网原生库使 APK 增大 | 安装包体积偏大 | tsnet 已通过 `-ldflags="-s -w"` + `ts_omit_*` 将 `libgojni.so` 从 30.5MB 裁剪至 19MB；当前还包含两个 EasyTier 原生库，后续可继续评估裁剪与按需分发 |
 
 ### 9.2 技术债
 
-- URI 作为唯一集成面，能力受限但稳定；若需剪贴板增强、音频、文件传输等高级能力，必须评估改造 AAR 或直接调用 `LibFreeRDP`。
+- 应用层连接主路径使用 URI，能力受限但稳定；剪贴板文本粘贴已通过 AAR 内的 `LibFreeRDP` 公开 API 实现，若需音频、文件传输等更多高级能力，仍需评估改造 AAR 或扩大 JNI 调用面。
 - 分辨率选项与显示文案靠两个数组索引对齐，新增选项必须同时改两处。
-- 12.5MB 原生库为体积下限；`libsqlcipher`（2.1MB）被引擎数据库使用，裁剪需重编 AAR 并回归。
+- 引擎与组网原生库构成主要安装包体积；`libsqlcipher`（约 2.1MB）被引擎数据库使用，裁剪需重编 AAR 并回归。
 - tsnet AAR 由仓库内 `tsnet-android/` Go module 构建，`scripts/build-tsnet-aar.sh` 可重建并同步 `tsnet-sources.jar`。脚本已固化体积优化参数（`-ldflags="-s -w"` + `-trimpath` + `ts_omit_*` 标签），产出 `tsnet.aar` 7.0MB（`libgojni.so` 19MB）。当前仓库内 `tsnet-sources.jar` 仍是早期版本（早于 `setNetworkInfo` 改动），AAR 本体已含该方法；重跑脚本即可回填最新 sources。
-- `TailscaleManager` 全部 JNI 调用串行化且只支持单实例；未来多节点需要改为按配置 id 管理实例池。
+- `TailscaleManager` 的 JNI 调用串行化，`TailscaleManager` / `EasyTierManager` 均只支持单实例；未来多节点需要改为按配置 id 管理实例池。
 - tsnet 状态目录（`filesDir/tailscale-state-<id>/`）会持久化节点身份与 `tsnet.log`，卸载应用才清理；暂无「重置节点」入口。
 
 ---
 
 ## 10. 演进建议（按优先级）
 
-1. **会话与输入**：错误反馈（R5）、中文文本注入（R9）、动态分辨率（R4）。
-2. **安全与显示**：密码加密（R1）、限制会话页导出（R2）、insets 适配（R3）。
+1. **会话与输入**：错误反馈（R5）、本地 IME 组词输入（R9）、动态分辨率（R4）。
+2. **安全与显示**：密码加密（R1）、insets 适配（R3）；升级 AAR 时保持会话页导出防护（R2）。
 3. **日常易用**：搜索/排序/撤销删除（R6）、分辨率与画质档位、记住密码开关。
 4. **工程化**：单元测试（R7）、补 `values-en`；正式签名与 CI 发布已完成（R8）。
-5. **Tailscale 完善**：前台服务保活（R11）、多配置列表/切换/删除（R12）、节点状态页与重置、authKey 加密（R13）、按 ABI 分包进一步减重（R14，当前已优化至 35MB）。
+5. **组网完善**：前台服务保活（R11）、多配置列表/切换/删除（R12）、节点状态页与重置、组网凭据加密（R13）、原生库进一步减重（R14）。
 
 ---
 
@@ -513,7 +529,8 @@ git push origin v1.0.2
 | 密码 | 否 | `""` | 为空则连接前询问，不落库 |
 | 域名 | 否 | `""` | 为空时不传 `/d:` |
 | 分辨率 | 是 | `adaptive` | 见 5.3 |
-| Tailscale 配置 | 否 | 0（直连） | `tailscaleConfigId`；指向 `tailscale_configs.id` |
+| Tailscale 配置 | 否 | 0（未绑定） | `tailscaleConfigId`；指向 `tailscale_configs.id`，与 EasyTier 互斥 |
+| EasyTier 配置 | 否 | 0（未绑定） | `easytierConfigId`；指向 `easytier_configs.id`，与 Tailscale 互斥；两者均为 0 时直连 |
 
 ## 附录 C：Tailscale 配置字段与默认值
 
