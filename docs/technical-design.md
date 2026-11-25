@@ -337,6 +337,7 @@ freerdp://<user>@<host>[:<port>]/connect?size=<WxH>&p=<password>&d=<domain>[&pro
 - `ExtendedKeyboardView`（浮动工具条中的自绘 PC 键盘）发送真实扫描码；`SessionInputManager.toggleKeyboard()` 同时显示扩展键盘并调用 `showSoftInput(sessionView, 1)`。
 - **悬浮工具栏「粘贴文本」**提供独立的本地文本入口：`FloatingToolbar.Listener.onPasteText()` → `SessionActivity.showPasteTextDialog()` → `pasteTextToRemote(text)`。
 - 粘贴实现先执行 `mClipboardManager.setClipboardData(text)`，再执行 `LibFreeRDP.sendClipboardData(instance, text)`，200ms 后通过 `processVirtualKey` 发送 Ctrl+V 完整按下/抬起序列。同步本地剪贴板可避免对话框关闭后的 `onWindowFocusChanged(true)` 重新上传旧内容并覆盖本次文本。
+- **粘贴历史记录**：每次确认粘贴的文本写入应用私有 `SharedPreferences`（`paste_text_history`，JSON 数组），最多 30 条、最新在前、重复文本去重置顶；对话框中点击历史条目回填输入框（可再编辑），长按删除单条，「清空」清除全部。历史仅保存用户主动粘贴的文本，存于本机应用私有目录，不上传远端。
 - `SessionInputManager` 中保留文本按键及非 ASCII 剪贴板回退辅助逻辑，但当前上游 `TYPE_NULL` 输入连接不会触发其 `onSessionViewCommitText` 入口。
 
 ---

@@ -681,7 +681,7 @@ if 'onPasteText' not in ftc:
     ftj.write_text(ftc, encoding='utf-8')
     print('    patched: FloatingToolbar.java')
 
-# 5) SessionActivity.java 新增粘贴对话框与粘贴逻辑
+# 5) SessionActivity.java 新增粘贴对话框（含历史记录）与粘贴逻辑
 sap = studio / 'freeRDPCore/src/main/java/com/freerdp/freerdpcore/presentation/SessionActivity.java'
 sa = sap.read_text(encoding='utf-8')
 if 'showPasteTextDialog' not in sa:
@@ -712,55 +712,184 @@ if 'showPasteTextDialog' not in sa:
               '\t\t});')
     assert old_kb in sa
     sa = sa.replace(old_kb, new_kb, 1)
-    # 新增 showPasteTextDialog / pasteTextToRemote 方法（插入到 onCreate 之后）
-    old_hide = '\t\thideSystemBars();\n\t}\n\n\t@Override public void onWindowFocusChanged'
-    new_methods = (
-        '\t\thideSystemBars();\n'
-        '\t}\n'
-        '\n'
-        '\t// 弹出本地输入框：用户输入/粘贴文本，点击"粘贴"后发送到远端。\n'
-        '\tprivate void showPasteTextDialog()\n'
-        '\t{\n'
-        '\t\tfinal EditText editText = new EditText(this);\n'
-        '\t\teditText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);\n'
-        '\t\teditText.setMinLines(3);\n'
-        '\t\teditText.setHint(R.string.menu_paste);\n'
-        '\n'
-        '\t\tnew AlertDialog.Builder(this)\n'
-        '\t\t    .setTitle(R.string.menu_paste)\n'
-        '\t\t    .setView(editText)\n'
-        '\t\t    .setPositiveButton(R.string.menu_paste, (dialog, which) -> {\n'
-        '\t\t\t    String text = editText.getText().toString();\n'
-        '\t\t\t    if (text.isEmpty())\n'
-        '\t\t\t\t    return;\n'
-        '\t\t\t    pasteTextToRemote(text);\n'
-        '\t\t    })\n'
-        '\t\t    .setNegativeButton(android.R.string.cancel, null)\n'
-        '\t\t    .show();\n'
-        '\t}\n'
-        '\n'
-        '\t// 将文本写入远端剪贴板并发送 Ctrl+V，由远端应用执行粘贴。\n'
-        '\tprivate void pasteTextToRemote(String text)\n'
-        '\t{\n'
-        '\t\tif (session == null || session.getInstance() == 0)\n'
-        '\t\t\treturn;\n'
-        '\t\tlong instance = session.getInstance();\n'
-        '\t\t// 对话框关闭后的焦点回调会重新上传本地剪贴板；先同步内容，避免旧值覆盖本次文本。\n'
-        '\t\tmClipboardManager.setClipboardData(text);\n'
-        '\t\tLibFreeRDP.sendClipboardData(instance, text);\n'
-        '\t\tnew android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {\n'
-        '\t\t\tinputManager.processVirtualKey(0xA2, true);   // VK_LCONTROL\n'
-        '\t\t\tinputManager.processVirtualKey(0x56, true);   // \'V\'\n'
-        '\t\t\tinputManager.processVirtualKey(0x56, false);\n'
-        '\t\t\tinputManager.processVirtualKey(0xA2, false);\n'
-        '\t\t}, 200);\n'
-        '\t}\n'
-        '\n'
-        '\t@Override public void onWindowFocusChanged')
-    assert old_hide in sa
-    sa = sa.replace(old_hide, new_methods, 1)
+
+# 粘贴对话框与历史记录方法块：全新插入与旧版本（无历史）升级共用。
+# 历史存于应用私有 SharedPreferences（JSON 数组），最多 30 条、最新在前、重复自动去重置顶；
+# 点击历史回填输入框，长按删除单条，"清空"清空全部。注意用 raw 字符串保留 Java 的 '\n' 字面量。
+DIALOG_METHODS = r'''	// 粘贴历史：本地 SharedPreferences（JSON），仅保存在本机，不上传远端。
+	private static final String PASTE_PREFS = "paste_text_history";
+	private static final int PASTE_HISTORY_LIMIT = 30;
+
+	private java.util.ArrayList<String> loadPasteHistory()
+	{
+		java.util.ArrayList<String> list = new java.util.ArrayList<>();
+		String raw = getSharedPreferences(PASTE_PREFS, MODE_PRIVATE).getString("entries", "[]");
+		try {
+			org.json.JSONArray arr = new org.json.JSONArray(raw);
+			for (int i = 0; i < arr.length(); i++)
+				list.add(arr.getString(i));
+		} catch (org.json.JSONException ignored) { }
+		return list;
+	}
+
+	private void savePasteHistory(java.util.List<String> list)
+	{
+		org.json.JSONArray arr = new org.json.JSONArray();
+		for (String s : list)
+			arr.put(s);
+		getSharedPreferences(PASTE_PREFS, MODE_PRIVATE).edit().putString("entries", arr.toString()).apply();
+	}
+
+	private void addPasteHistory(String text)
+	{
+		java.util.ArrayList<String> list = loadPasteHistory();
+		list.remove(text);
+		list.add(0, text);
+		while (list.size() > PASTE_HISTORY_LIMIT)
+			list.remove(list.size() - 1);
+		savePasteHistory(list);
+	}
+
+	// 弹出本地输入框：可直接输入，也可点击历史记录回填；粘贴成功后自动记入历史。
+	private void showPasteTextDialog()
+	{
+		final float density = getResources().getDisplayMetrics().density;
+		final EditText editText = new EditText(this);
+		editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+		editText.setMinLines(3);
+		editText.setHint(R.string.menu_paste);
+
+		final android.widget.LinearLayout container = new android.widget.LinearLayout(this);
+		container.setOrientation(android.widget.LinearLayout.VERTICAL);
+		int pad = (int)(16 * density);
+		container.setPadding(pad, pad / 2, pad, 0);
+		container.addView(editText, new android.widget.LinearLayout.LayoutParams(
+			android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+			android.widget.LinearLayout.LayoutParams.WRAP_CONTENT));
+
+		final java.util.ArrayList<String> history = loadPasteHistory();
+		final java.util.ArrayList<String> display = new java.util.ArrayList<>();
+		for (String s : history)
+			display.add(s.replace('\n', ' ').replace('\r', ' '));
+
+		if (!history.isEmpty())
+		{
+			final android.widget.LinearLayout header = new android.widget.LinearLayout(this);
+			header.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+			final android.widget.TextView title = new android.widget.TextView(this);
+			title.setText("历史记录");
+			header.addView(title, new android.widget.LinearLayout.LayoutParams(0,
+				android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+			final android.widget.TextView clear = new android.widget.TextView(this);
+			clear.setText("清空");
+			clear.setTextColor(0xFF888888);
+			clear.setPadding((int)(12 * density), (int)(8 * density), 0, (int)(8 * density));
+			header.addView(clear);
+			container.addView(header);
+
+			final android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<String>(
+				this, android.R.layout.simple_list_item_1, display)
+			{
+				@Override public android.view.View getView(int position, android.view.View convertView, android.view.ViewGroup parent)
+				{
+					android.view.View v = super.getView(position, convertView, parent);
+					android.widget.TextView tv = v.findViewById(android.R.id.text1);
+					tv.setSingleLine(true);
+					tv.setEllipsize(android.text.TextUtils.TruncateAt.END);
+					return v;
+				}
+			};
+			final android.widget.ListView listView = new android.widget.ListView(this);
+			listView.setAdapter(adapter);
+			final android.widget.LinearLayout.LayoutParams listParams = new android.widget.LinearLayout.LayoutParams(
+				android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+				(int)(Math.min(history.size(), 4) * 48 * density));
+			container.addView(listView, listParams);
+
+			listView.setOnItemClickListener((parent, view, position, id) -> {
+				editText.setText(history.get(position));
+				editText.setSelection(editText.getText().length());
+			});
+			listView.setOnItemLongClickListener((parent, view, position, id) -> {
+				new AlertDialog.Builder(this)
+					.setMessage("删除这条历史记录？")
+					.setPositiveButton("删除", (d, w) -> {
+						history.remove(position);
+						display.remove(position);
+						savePasteHistory(history);
+						adapter.notifyDataSetChanged();
+						if (history.isEmpty()) {
+							header.setVisibility(android.view.View.GONE);
+							listView.setVisibility(android.view.View.GONE);
+						} else {
+							listParams.height = (int)(Math.min(history.size(), 4) * 48 * density);
+							listView.setLayoutParams(listParams);
+						}
+					})
+					.setNegativeButton(android.R.string.cancel, null)
+					.show();
+				return true;
+			});
+			clear.setOnClickListener(v -> {
+				history.clear();
+				display.clear();
+				savePasteHistory(history);
+				adapter.notifyDataSetChanged();
+				header.setVisibility(android.view.View.GONE);
+				listView.setVisibility(android.view.View.GONE);
+			});
+		}
+
+		new AlertDialog.Builder(this)
+			.setTitle(R.string.menu_paste)
+			.setView(container)
+			.setPositiveButton(R.string.menu_paste, (dialog, which) -> {
+				String text = editText.getText().toString();
+				if (text.isEmpty())
+					return;
+				addPasteHistory(text);
+				pasteTextToRemote(text);
+			})
+			.setNegativeButton(android.R.string.cancel, null)
+			.show();
+	}
+
+'''
+
+PASTE_METHOD = r'''	// 将文本写入远端剪贴板并发送 Ctrl+V，由远端应用执行粘贴。
+	private void pasteTextToRemote(String text)
+	{
+		if (session == null || session.getInstance() == 0)
+			return;
+		long instance = session.getInstance();
+		// 对话框关闭后的焦点回调会重新上传本地剪贴板；先同步内容，避免旧值覆盖本次文本。
+		mClipboardManager.setClipboardData(text);
+		LibFreeRDP.sendClipboardData(instance, text);
+		new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+			inputManager.processVirtualKey(0xA2, true);   // VK_LCONTROL
+			inputManager.processVirtualKey(0x56, true);   // 'V'
+			inputManager.processVirtualKey(0x56, false);
+			inputManager.processVirtualKey(0xA2, false);
+		}, 200);
+	}
+
+'''
+
+if 'loadPasteHistory' not in sa:
+    if '\tprivate void showPasteTextDialog()' in sa:
+        # 旧版本（无历史）升级：替换 showPasteTextDialog 整段，保留 pasteTextToRemote。
+        start = sa.index('\tprivate void showPasteTextDialog()')
+        end = sa.index('\t// 将文本写入远端剪贴板', start)
+        sa = sa[:start] + DIALOG_METHODS + sa[end:]
+        print('    upgraded: SessionActivity.java 粘贴对话框加入历史记录')
+    else:
+        # 全新源码：onCreate 之后插入对话框（含历史）与粘贴方法。
+        old_hide = '\t\thideSystemBars();\n\t}\n\n\t@Override public void onWindowFocusChanged'
+        assert old_hide in sa
+        sa = sa.replace(old_hide, '\t\thideSystemBars();\n\t}\n\n'
+                        + DIALOG_METHODS + PASTE_METHOD + '\t@Override public void onWindowFocusChanged', 1)
+        print('    patched: SessionActivity.java')
     sap.write_text(sa, encoding='utf-8')
-    print('    patched: SessionActivity.java')
 
 # 已打过 2.4.x 旧补丁的源码树也要升级，不能只处理全新源码。
 method_start = sa.index('\tprivate void pasteTextToRemote(String text)')

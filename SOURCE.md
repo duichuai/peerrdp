@@ -24,7 +24,7 @@ AAR 由上述源码构建。构建脚本先应用 9 处构建配置与依赖补�
 9. `cmake/DepVersions.cmake` → 按实际镜像文件写入依赖版本与 sha256
 10. `ClipboardImageProvider.java` 与引擎 `AndroidManifest.xml` → 剪贴板 FileProvider authority 改为 `com.peerrdp.freerdpcore.clipboard`，避免与其他 FreeRDP 客户端冲突
 11. `SessionView.java`、`SessionInputManager.java` → 增加文本输入回调、文本按键与剪贴板粘贴回退辅助逻辑；当前 `SessionView` 保持上游 `TYPE_NULL` + `BaseInputConnection`，中文组词由远端输入法处理
-12. `FloatingToolbar.java`、`SessionActivity.java` 及工具栏布局、字符串和图标资源 → 新增「粘贴文本」入口；确认文本后先同步 Android 本地剪贴板，再调用 `LibFreeRDP.sendClipboardData`，等待 200ms 后发送 Ctrl+V，避免焦点恢复时旧剪贴板覆盖本次内容
+12. `FloatingToolbar.java`、`SessionActivity.java` 及工具栏布局、字符串和图标资源 → 新增「粘贴文本」入口；确认文本后先同步 Android 本地剪贴板，再调用 `LibFreeRDP.sendClipboardData`，等待 200ms 后发送 Ctrl+V，避免焦点恢复时旧剪贴板覆盖本次内容。对话框含历史记录：SharedPreferences（JSON）本地保存最近 30 条，点击回填、长按删除、可清空
 
 完整且可执行的补丁实现见仓库脚本 [`scripts/build-freerdpcore-aar.sh`](scripts/build-freerdpcore-aar.sh)。该脚本会自动下载对应版本的上游源码、应用上述补丁并编译，提供本 AAR 对应的 Source Code Form（脚本默认版本即 FreeRDP 3.33.1）。
 
